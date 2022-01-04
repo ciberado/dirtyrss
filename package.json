@@ -1,0 +1,17 @@
+{
+  "name": "dirtyrss",
+  "version": "0.0.1",
+  "description": "Transforms some webpages in podcast feeds",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node ./dist/index.js",
+    "dev": "tsc-watch --onSuccess \"npm start\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "tsc-watch": "^4.6.0",
+    "typescript": "^4.5.4"
+  }
+}
