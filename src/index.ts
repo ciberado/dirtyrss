@@ -1,6 +1,7 @@
 import { default as cheerio } from 'cheerio';
 import { default as got } from 'got';
 import { Podcast } from 'podcast';
+import { default as fastify } from 'fastify';
 
 class Chapter {
     private _id: string;
@@ -118,6 +119,15 @@ async function main() {
     const ivoox = new IVoox(programUrl);
     await ivoox.fetch();
     const xmlFeed = ivoox.generateFeed();    
+
+    const app = fastify();
+    app.get('/', async (req, reply) => {
+        reply.send(xmlFeed);
+    });
+    app.listen(3000, '0.0.0.0', function (err, address) {
+        console.log(`Server started.`);
+    });
 }
 
 main();
+
