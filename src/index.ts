@@ -77,7 +77,8 @@ class IVoox {
             feed.addItem({
                 title : p.title,
                 enclosure : {
-                    url : p.fileUrl
+                    url : p.fileUrl,
+                    type : 'audio/mpeg'
                 }
             })
         });
