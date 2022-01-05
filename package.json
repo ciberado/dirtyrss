@@ -4,6 +4,7 @@
   "description": "Transforms some webpages in podcast feeds",
   "main": "dist/index.js",
   "type": "module",
+  "engines": { "node": "12.x" },
   "scripts": {
     "start": "node ./dist/index.js",
     "dev": "tsc-watch --onSuccess \"npm start\"",
