@@ -92,7 +92,7 @@ class IVoox {
      */
     static async search(programName: string) : Promise<string | undefined> {
         console.info(`Searching for the program "${programName}"`);
-        programName = programName.trim().toLowerCase().replaceAll(' ', '-');
+        programName = programName.trim().toLowerCase().replace(/ /g, '-');
         const searchURL = `https://www.ivoox.com/${programName}_sw_1_1.html`;
         const searchResponsePage = await got(searchURL);
 
