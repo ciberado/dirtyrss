@@ -4,7 +4,9 @@
   "description": "Transforms some webpages in podcast feeds",
   "main": "dist/index.js",
   "type": "module",
-  "engines": { "node": "12.x" },
+  "engines": {
+    "node": "12.x"
+  },
   "scripts": {
     "start": "node ./dist/index.js",
     "dev": "tsc-watch --onSuccess \"npm start\"",
@@ -19,6 +21,7 @@
   "dependencies": {
     "cheerio": "^1.0.0-rc.10",
     "got": "^12.0.0",
+    "http4ts": "^0.1.2",
     "podcast": "^2.0.0"
   }
 }
