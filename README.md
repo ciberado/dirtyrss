@@ -1,6 +1,6 @@
 # dirtyrss
 
-Gracias a [Ivoox](https://ivoox.com) por crear una App tan tan mala que ha cosneguido que me entren las ganas
+Gracias a [Ivoox](https://ivoox.com) por crear una App tan tan mala que ha conseguido que me entren las ganas
 suficientes como para coger el teclado y montar un scrapper de los podcasts para generar un feed rss tradicional.
 De esta manera puedo apuntar mi podcatcher favorito a este servidor y subscribirme a ellos de la misma manera
 que lo hago con cualquier otra fuente de shows.
