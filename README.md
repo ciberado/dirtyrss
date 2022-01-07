@@ -65,11 +65,11 @@ actualiza tu feed antes de darle al play.
 Pull request are welcome! Esta es obviamente una implementación rápida y sucia escrita en un par de días durante
 las vacaciones de navidades. A mi me sirve, pero hay optimizaciones obvias que estarían chulas. Por ejemplo:
 
-[ ] Hacer el código compatible con Lambda
-[ ] Añadir una caché para los shows habituales
-[ ] Revisar por qué algunos programas parece que no se descargan correctamente
-[ ] Documentar mejor el código antes de que crezca
-[ ] Montar una batería de tests
-[ ] Generar podcasts a partir de otras fuentes, como Twitch
+[] Hacer el código compatible con Lambda
+[] Añadir una caché para los shows habituales
+[] Revisar por qué algunos programas parece que no se descargan correctamente
+[] Documentar mejor el código antes de que crezca
+[] Montar una batería de tests
+[] Generar podcasts a partir de otras fuentes, como Twitch
 
 Si te animas, coméntamelo y te cuento cómo hackear el código. Ya sabes dónde encontrarme: http://twitter.com/ciberado.
