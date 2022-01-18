@@ -33,7 +33,7 @@ export class IVoox {
 
         const audioUrlTempl = "https://www.ivoox.com/listenembeded_mn_12345678_1.mp3?source=EMBEDEDHTML5";
 
-        const id = (url.match(/\d{4,8}/g))![0];
+        const id = (url.match(/\d{6,12}/g))![0];
         const audioRealUrl = audioUrlTempl.replace('12345678', id);
 
         const description = $('.description').text().trim();
