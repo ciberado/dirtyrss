@@ -6,7 +6,10 @@ import { Params } from './Params';
 import { TwitchChannel } from './TwitchChannel.js';
 
 
-await TwitchChannel.ensureDependencies();
+await TwitchChannel.ensureTwitchDl();
+const tc = new TwitchChannel('mossegalapoma');
+await tc.fetchChannelData();
+
 if (0===0) process.exit(0);
 
 async function generateFeed(programName: string) : Promise<string> {
