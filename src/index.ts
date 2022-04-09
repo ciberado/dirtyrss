@@ -1,6 +1,13 @@
 import { default as fastify } from 'fastify';
+
 import { IVoox } from './IVoox.js';
 import { Params } from './Params';
+
+import { TwitchChannel } from './TwitchChannel.js';
+
+
+await TwitchChannel.ensureDependencies();
+if (0===0) process.exit(0);
 
 async function generateFeed(programName: string) : Promise<string> {
     const programUrl = await IVoox.search(programName);
