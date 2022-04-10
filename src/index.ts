@@ -1,5 +1,6 @@
+import fs from 'fs';
 import { fastify } from 'fastify';
-
+import { default as fastifyStatic } from 'fastify-static';
 import { IVoox } from './IVoox.js';
 import { Params } from './Params';
 
@@ -21,6 +22,15 @@ async function generateFeed(programName: string) : Promise<string> {
 }
 
 const app = fastify();
+
+const FASTIFY_STATIC = '/tmp/public'
+if (fs.existsSync(FASTIFY_STATIC) === false) {
+    fs.mkdirSync(FASTIFY_STATIC, { recursive : true});
+}
+app.register(fastifyStatic, {
+    root : FASTIFY_STATIC,
+    acceptRanges : true
+});
 
 app.get('/', async (req, reply) => {
     const params = req.query as Params;
@@ -52,6 +62,10 @@ app.get('/twitch/:showId', async (req, reply) => {
         console.warn(err);
         reply.code(404).type('text/html').send(`Podcast ${request.params.showId} not found (${err}).`);
     }
+});
+
+app.get('/twitch/:showId/:episodeId', async (req, rep) => {
+
 });
 
 app.get('/ivoox/:showId', async (req, reply) => {
