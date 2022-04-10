@@ -1,4 +1,4 @@
-import { default as fastify } from 'fastify';
+import { fastify } from 'fastify';
 
 import { IVoox } from './IVoox.js';
 import { Params } from './Params';
@@ -21,6 +21,7 @@ async function generateFeed(programName: string) : Promise<string> {
 }
 
 const app = fastify();
+
 app.get('/', async (req, reply) => {
     const params = req.query as Params;
     try {    
