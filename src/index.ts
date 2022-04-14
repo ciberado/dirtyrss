@@ -46,6 +46,7 @@ app.get('/', async (req, reply) => {
 interface HttpRequest {
     params : {
         showId : string;
+        episodeId: string;
     }
     query : {
         podcast : string;
@@ -64,8 +65,13 @@ app.get('/twitch/:showId', async (req, reply) => {
     }
 });
 
-app.get('/twitch/:showId/:episodeId', async (req, rep) => {
+app.get('/twitch/:showId/:episodeId', async (req, reply) => {
+    const request = req as HttpRequest;
 
+    const tc = new TwitchChannel(request.params.showId);
+    const fileName = tc.ensureEpisodeFileExists(FASTIFY_STATIC, request.params.episodeId);
+    const url = fileName.substring(FASTIFY_STATIC.length);
+    reply.download(url);
 });
 
 app.get('/ivoox/:showId', async (req, reply) => {

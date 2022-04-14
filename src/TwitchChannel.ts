@@ -1,5 +1,7 @@
+import fs from 'fs';
+import path from 'path';
+
 import { Podcast } from 'podcast';
-import { default as path } from 'path';
 import commandExists from 'command-exists';
 import { downloadRelease } from '@terascope/fetch-github-release';
 import {PythonShell} from 'python-shell';
@@ -21,6 +23,8 @@ interface TwitchChannelData {
 }
 
 export class TwitchChannel {
+
+    static EPISODE_DOWNLOADING_MESSAGE_AUDIO_FILE_PATH = `${path.resolve('.')}/assets/downloading.aac`;
 
     static twitchDlPath : string;
 
@@ -63,6 +67,7 @@ export class TwitchChannel {
 
     private async fetchChannelData() : Promise<TwitchChannelData>{
         return new Promise((resolve, reject) => {
+            console.log(`Retrieving list of episodes for channel ${this.channelName}.`);
             const opt = {
                 mode: 'json' as const,
                 pythonPath: '/usr/bin/python3',
@@ -71,10 +76,9 @@ export class TwitchChannel {
                 args: ['videos', this.channelName, '--json']
               };
         
-            console.log(`wop`);
             PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, function (err, results) {
                 if (err) reject(err);
-                console.log('finished');
+                console.log('List of episodes retrieved.');
                 resolve(results![0] as TwitchChannelData);
             });
     
@@ -85,7 +89,7 @@ export class TwitchChannel {
         console.info(`Creating rss feed for ${this.channelName}.`);
 
         const twitchChannelData = await this.fetchChannelData();
-console.log(JSON.stringify(twitchChannelData))
+        
         const feed = new Podcast({
             title: this.channelName,
             author: twitchChannelData.count === 0 ? 
@@ -110,4 +114,37 @@ console.log(JSON.stringify(twitchChannelData))
         return feed.buildXml();
     }
 
+    private async downloadEpisode(episodeId : string, fileName: string) {
+        return new Promise((resolve, reject) => {
+            const opt = {
+                mode: 'text' as const,
+                pythonPath: '/usr/bin/python3',
+                pythonOptions: [], 
+                scriptPath: path.dirname(TwitchChannel.twitchDlPath),
+                args: ['download', episodeId, `--output`, fileName, `--overwrite`,
+                       `--quality`, `audio_only`]
+              };
+        
+            console.log(`Downloading episode ${episodeId} in the background`);
+            PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, function (err, results) {
+                if (err) reject(err);
+                console.log(`Episode downloaded at ${fileName}.`);
+                resolve({fileName});
+            });
+    
+        });
+    }
+
+    public ensureEpisodeFileExists(directoryRoot: string, episodeId: string) : string {
+        const fileName = `${directoryRoot}/twitch/${episodeId}.aac`;
+        console.log(`Ensuring ${fileName} is available.`);
+
+        // check if the file exists, or return the default one
+        if (fs.existsSync(fileName) === false) {
+            console.log(`Creating temporal symlink to default audio.`);
+            fs.symlinkSync(TwitchChannel.EPISODE_DOWNLOADING_MESSAGE_AUDIO_FILE_PATH, fileName);
+            this.downloadEpisode(episodeId, fileName);
+        } 
+        return fileName;
+    }
 }
