@@ -127,7 +127,10 @@ export class TwitchChannel {
         
             console.log(`Downloading episode ${episodeId} in the background`);
             PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, function (err, results) {
-                if (err) reject(err);
+                if (err) {
+                    console.error(`[ERROR] Downloading twitch show ${episodeId} (${err}).`);
+                    reject(err);
+                }
                 console.log(`Episode downloaded at ${fileName}.`);
                 resolve({fileName});
             });
