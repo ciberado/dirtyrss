@@ -1,4 +1,7 @@
 import fs from 'fs';
+import path from 'path';
+import fse from 'fs-extra';
+
 import { fastify } from 'fastify';
 import { default as fastifyStatic } from 'fastify-static';
 import { IVoox } from './IVoox.js';
@@ -7,7 +10,8 @@ import { Params } from './Params';
 import { TwitchChannel } from './TwitchChannel.js';
 
 
-await TwitchChannel.ensureTwitchDl();
+await TwitchChannel.initializeWitchSubsystem();
+
 
 async function generateFeed(programName: string) : Promise<string> {
     const programUrl = await IVoox.search(programName);
@@ -21,9 +25,13 @@ async function generateFeed(programName: string) : Promise<string> {
     return xmlFeed;
 }
 
+const FASTIFY_STATIC = '/tmp/public';
+const ASSETS_DIRECTORY = `${path.resolve('.')}/assets/`;
+
+fse.copySync(ASSETS_DIRECTORY, FASTIFY_STATIC);
+
 const app = fastify();
 
-const FASTIFY_STATIC = '/tmp/public'
 if (fs.existsSync(FASTIFY_STATIC) === false) {
     fs.mkdirSync(FASTIFY_STATIC, { recursive : true});
 }
@@ -69,8 +77,8 @@ app.get('/twitch/:showId/:episodeId', async (req, reply) => {
     const request = req as HttpRequest;
 
     const tc = new TwitchChannel(request.params.showId);
-    const fileName = tc.ensureEpisodeFileExists(FASTIFY_STATIC, request.params.episodeId);
-    const url = fileName.substring(FASTIFY_STATIC.length);
+    const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, request.params.episodeId);
+    const url = fileName ? fileName.substring(FASTIFY_STATIC.length) : 'downloading.aac';
     reply.download(url);
 });
 

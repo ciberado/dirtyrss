@@ -24,13 +24,12 @@ interface TwitchChannelData {
 
 export class TwitchChannel {
 
-    static EPISODE_DOWNLOADING_MESSAGE_AUDIO_FILE_PATH = `${path.resolve('.')}/assets/downloading.aac`;
-
     static twitchDlPath : string;
+    static downloadingEpisodes : { [key: string]: boolean; } = {};
 
     channelName : string;
 
-    static async ensureTwitchDl() : Promise<string> {
+    static async initializeWitchSubsystem() : Promise<string> {
         try {
             console.debug(`Checking for Python3.`);
             const python3Exists = commandExists.sync('python3');
@@ -75,7 +74,7 @@ export class TwitchChannel {
                 scriptPath: path.dirname(TwitchChannel.twitchDlPath),
                 args: ['videos', this.channelName, '--json']
               };
-        
+
             PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, function (err, results) {
                 if (err) reject(err);
                 console.log('List of episodes retrieved.');
@@ -116,6 +115,10 @@ export class TwitchChannel {
 
     private async downloadEpisode(episodeId : string, fileName: string) {
         return new Promise((resolve, reject) => {
+            if (TwitchChannel.downloadingEpisodes[episodeId] === true) {
+                console.log(`Episode ${episodeId} already being downloaded.`);
+                return;
+            }
             const opt = {
                 mode: 'text' as const,
                 pythonPath: '/usr/bin/python3',
@@ -126,7 +129,9 @@ export class TwitchChannel {
               };
         
             console.log(`Downloading episode ${episodeId} in the background`);
-            PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, function (err, results) {
+            TwitchChannel.downloadingEpisodes[episodeId] = true;
+            PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, (err, results) => {
+                delete TwitchChannel.downloadingEpisodes[episodeId];
                 if (err) {
                     console.error(`[ERROR] Downloading twitch show ${episodeId} (${err}).`);
                     reject(err);
@@ -138,16 +143,18 @@ export class TwitchChannel {
         });
     }
 
-    public ensureEpisodeFileExists(directoryRoot: string, episodeId: string) : string {
+    public getFileNameForEpisode(directoryRoot: string, episodeId: string) : string | null {
         const fileName = `${directoryRoot}/twitch/${episodeId}.aac`;
         console.log(`Ensuring ${fileName} is available.`);
 
         // check if the file exists, or return the default one
         if (fs.existsSync(fileName) === false) {
-            console.log(`Creating temporal symlink to default audio.`);
-            fs.symlinkSync(TwitchChannel.EPISODE_DOWNLOADING_MESSAGE_AUDIO_FILE_PATH, fileName);
+            console.log(`Episode ${episodeId} not available locally.`);
             this.downloadEpisode(episodeId, fileName);
-        } 
-        return fileName;
+            return null;
+        } else {
+            console.log(`Episode ${episodeId} available.`);
+            return fileName;
+        }
     }
 }
