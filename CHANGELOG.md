@@ -1,5 +1,9 @@
 # New and worthy
 
+## 0.0.4
+
+* General refactoring
+
 ## 0.0.3
 
 * New API endpoint for iVoox: /ivoox/:showId

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import fse from 'fs-extra';
 
-import { fastify, FastifyRequest, FastifyReply } from 'fastify';
+import { fastify, FastifyReply } from 'fastify';
 import { default as fastifyStatic } from 'fastify-static';
 import { IVooxChannel } from './IVooxChannel.js';
 
