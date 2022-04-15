@@ -2,7 +2,8 @@
 
 ## 0.0.3
 
-* Experimenting with support for twitch WIP
+* New API endpoint for iVoox: /ivoox/:showId
+* Experimenting with support for twitch at /twitch/:showId
 
 ## 0.0.2
 
