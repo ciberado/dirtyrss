@@ -67,7 +67,7 @@ las vacaciones de navidades. A mi me sirve, pero hay optimizaciones obvias que e
 
 - [ ] Hacer el código compatible con Lambda
 - [ ] Añadir una caché para los shows habituales
-- [ ] Revisar por qué algunos programas parece que no se descargan correctamente
+- [x] ~Revisar por qué algunos programas parece que no se descargan correctamente~
 - [ ] Documentar mejor el código antes de que crezca
 - [ ] Montar una batería de tests
 - [ ] Generar podcasts a partir de otras fuentes, como Twitch
