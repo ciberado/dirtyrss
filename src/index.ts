@@ -4,26 +4,13 @@ import fse from 'fs-extra';
 
 import { fastify } from 'fastify';
 import { default as fastifyStatic } from 'fastify-static';
-import { IVoox } from './IVoox.js';
-import { Params } from './Params';
+import { IVooxChannel } from './IVooxChannel.js';
 
 import { TwitchChannel } from './TwitchChannel.js';
 
 
 await TwitchChannel.initializeWitchSubsystem();
 
-
-async function generateFeed(programName: string) : Promise<string> {
-    const programUrl = await IVoox.search(programName);
-
-    if (programUrl === undefined) {
-        throw new Error(`URL not found for the program ${programUrl}.`);
-    }
-    const ivoox = new IVoox(programUrl);
-    await ivoox.fetch();
-    const xmlFeed = ivoox.generateFeed();    
-    return xmlFeed;
-}
 
 const FASTIFY_STATIC = '/tmp/public';
 const ASSETS_DIRECTORY = `${path.resolve('.')}/assets/`;
@@ -41,13 +28,15 @@ app.register(fastifyStatic, {
 });
 
 app.get('/', async (req, reply) => {
-    const params = req.query as Params;
+    const request = req as HttpRequest;
     try {    
-        const xmlFeed = await generateFeed(params.podcast);
+        const ic = new IVooxChannel(request.query.podcast);
+        const xmlFeed = await ic.generateFeed();
+
         reply.send(xmlFeed);    
     } catch (e) {
         console.warn(e);
-        reply.code(404).type('text/html').send(`Podcast ${params.podcast} not found (${e}).`);
+        reply.code(404).type('text/html').send(`Podcast ${request.query.podcast} not found (${e}).`);
     }
 });
 
@@ -85,11 +74,13 @@ app.get('/twitch/:showId/:episodeId', async (req, reply) => {
 app.get('/ivoox/:showId', async (req, reply) => {
     const request = req as HttpRequest;
     try {    
-        const xmlFeed = await generateFeed(request.params.showId);
+        const ic = new IVooxChannel(request.params.showId);
+        const xmlFeed = await ic.generateFeed();
+
         reply.send(xmlFeed);    
-    } catch (err) {
-        console.warn(err);
-        reply.code(404).type('text/html').send(`Podcast ${request.params.showId} not found (${err}).`);
+    } catch (e) {
+        console.warn(e);
+        reply.code(404).type('text/html').send(`Podcast ${request.query.podcast} not found (${e}).`);
     }
 });
 
