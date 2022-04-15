@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import fse from 'fs-extra';
 
-import { fastify } from 'fastify';
+import { fastify, FastifyRequest, FastifyReply } from 'fastify';
 import { default as fastifyStatic } from 'fastify-static';
 import { IVooxChannel } from './IVooxChannel.js';
 
@@ -25,19 +25,6 @@ if (fs.existsSync(FASTIFY_STATIC) === false) {
 app.register(fastifyStatic, {
     root : FASTIFY_STATIC,
     acceptRanges : true
-});
-
-app.get('/', async (req, reply) => {
-    const request = req as HttpRequest;
-    try {    
-        const ic = new IVooxChannel(request.query.podcast);
-        const xmlFeed = await ic.generateFeed();
-
-        reply.send(xmlFeed);    
-    } catch (e) {
-        console.warn(e);
-        reply.code(404).type('text/html').send(`Podcast ${request.query.podcast} not found (${e}).`);
-    }
 });
 
 interface HttpRequest {
@@ -71,17 +58,30 @@ app.get('/twitch/:showId/:episodeId', async (req, reply) => {
     reply.download(url);
 });
 
-app.get('/ivoox/:showId', async (req, reply) => {
-    const request = req as HttpRequest;
-    try {    
-        const ic = new IVooxChannel(request.params.showId);
-        const xmlFeed = await ic.generateFeed();
 
-        reply.send(xmlFeed);    
-    } catch (e) {
-        console.warn(e);
-        reply.code(404).type('text/html').send(`Podcast ${request.query.podcast} not found (${e}).`);
+async function processIVooxRequest(request : HttpRequest, reply : FastifyReply) {
+    try {    
+        const channelName = request.query.podcast || request.params.showId;
+        const ic = new IVooxChannel(channelName);
+        const xmlFeed = await ic.generateFeed();
+        if (xmlFeed === null) {
+            reply.code(404).type('text/html').send(`Podcast ${request.query.podcast} not found.`);
+        } else {
+            reply.send(xmlFeed);    
+        }
+    } catch (err) {
+        console.warn(err);
+        reply.code(500).type('text/html').send(`[ERROR] ${err}.`);
     }
+}
+
+app.get('/', async (req, reply) => {
+    await processIVooxRequest( req as HttpRequest, reply);
+});
+
+
+app.get('/ivoox/:showId', async (req, reply) => {
+    await processIVooxRequest( req as HttpRequest, reply);
 });
 
 app.listen(3000, '0.0.0.0', function (err, address) {
