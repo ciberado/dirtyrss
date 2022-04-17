@@ -64,7 +64,7 @@ async function processIVooxRequest(request : HttpRequest, reply : FastifyReply) 
         const channelName = request.query.podcast || request.params.showId;
         const ic = new IVooxChannel(channelName);
         const xmlFeed = await ic.generateFeed();
-        if (xmlFeed === null) {
+        if (xmlFeed === undefined) {
             reply.code(404).type('text/html').send(`Podcast ${request.query.podcast} not found.`);
         } else {
             reply.send(xmlFeed);    

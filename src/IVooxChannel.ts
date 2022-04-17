@@ -1,20 +1,15 @@
 import { default as cheerio } from 'cheerio';
 import { default as got } from 'got';
-import { Podcast } from 'podcast';
 import { Chapter } from './Chapter.js';
 
-export class IVooxChannel {
+import { Channel } from './Channel.js';
 
-    private channelName: string;
-    private description?: string;
-    private feedUrl?: string;
-    private siteUrl?: string;
-    private imageUrl?: string;
-    private author?: string;
-    private ttlInMinutes?: number;
+export class IVooxChannel extends Channel {
+
+    private programUrl? : string;
 
     constructor(channelName: string) {
-        this.channelName= channelName;
+        super(channelName);
     }
 
     private fromSpanishDate(text: string): Date {
@@ -22,7 +17,27 @@ export class IVooxChannel {
         return new Date(parseInt(parts![4]), parseInt(parts![3]) - 1, parseInt(parts![1]));
     }
 
-    private async fetchChapterData(title: string, url: string): Promise<Chapter> {
+    protected async fetchEpisodeList() : Promise<Chapter[]> {
+        console.info(`Configuring feed from ${this.programUrl}`);
+        const programResponsePage = await got(this.programUrl || '');
+        const $ = cheerio.load(programResponsePage.body);
+
+        super.channelName = $('h1').text().trim();
+        super.author = $('.info a').text().trim();
+        super.description = $('.overview').text().trim();
+        super.imageUrl = $('.imagen-ficha img').attr('data-src')?.trim();
+        super.ttlInMinutes = 60;
+        super.siteUrl = this.programUrl;
+
+        const chapters = await Promise.all(
+            [...$('.title-wrapper a')]
+                .filter(a => a)
+                .map(a => this.fetchChapterData($(a)?.text().trim(), $(a).attr('href') || ''))
+        );
+        return chapters;
+    }
+
+    protected async fetchChapterData(title: string, url: string): Promise<Chapter> {
         console.debug(`Retrieving info for chapter from ${title} (${url}).`);
         const programResponsePage = await got(url);
 
@@ -42,27 +57,7 @@ export class IVooxChannel {
         return chapter;
     }        
 
-    private async fetchEpisodeList(programUrl : string) : Promise<Chapter[]> {
-        console.info(`Configuring feed from ${programUrl}`);
-        const programResponsePage = await got(programUrl);
-        const $ = cheerio.load(programResponsePage.body);
-
-        this.channelName = $('h1').text().trim();
-        this.author = $('.info a').text().trim();
-        this.description = $('.overview').text().trim();
-        this.imageUrl = $('.imagen-ficha img').attr('data-src')?.trim();
-        this.ttlInMinutes = 60;
-        this.siteUrl = programUrl;
-
-        const chapters = await Promise.all(
-            [...$('.title-wrapper a')]
-                .filter(a => a)
-                .map(a => this.fetchChapterData($(a)?.text().trim(), $(a).attr('href') || ''))
-        );
-        return chapters;
-    }
-
-    private async findChannelUrl(): Promise<string | null> {
+    private async findChannelUrl(): Promise<string | undefined> {
         console.info(`Searching for the program "${this.channelName}"`);
         const normalizedName = this.channelName.trim().toLowerCase().replace(/ /g, '-');
         const searchURL = `https://www.ivoox.com/${normalizedName}_sw_1_1.html`;
@@ -76,46 +71,20 @@ export class IVooxChannel {
         const programUrl = anchor.attr('href')?.toString();
         console.debug(`Program url: ${programUrl}.`);
 
-        return programUrl === undefined ? null : programUrl;
+        return programUrl;
     }
 
-    public async generateFeed(): Promise<string | null> {
+    public async generateFeed(): Promise<string | undefined> {
         console.info(`Creating rss feed.`);
 
         console.debug(`Getting channel ${this.channelName} url.`);
-        const programUrl = await this.findChannelUrl();
-        if (programUrl === null) {
+        this.programUrl = await this.findChannelUrl();
+        if (this.programUrl === undefined) {
             console.warn(`Channel url not found for ${this.channelName}.`);
-            return null;
+            return;
         }
-
-        console.info(`Channel url is ${programUrl}.`);
-        console.debug(`Retrieving list of chapters.`);
-        const chapters = await this.fetchEpisodeList(programUrl);
-        console.info(`${chapters.length} chapters found for channel ${this.channelName}.`);
-
-        const feed = new Podcast({
-            title: this.channelName,
-            author: this.author,
-            description: this.description,
-            imageUrl: this.imageUrl,
-            ttl: this.ttlInMinutes
-        });
-
-        chapters.forEach(c => {
-            feed.addItem({
-                title: c.title,
-                date: c.date.toUTCString(),
-                description: c.description,
-                enclosure: {
-                    url: c.fileUrl,
-                    type: 'audio/mpeg'
-                }
-            });
-        });
-
-        return feed.buildXml();
+        console.info(`Channel url is ${this.programUrl}.`);
+        return super.generateFeed();
     }
-
 
 }
