@@ -36,20 +36,21 @@ export class TwitchChannel extends Channel{
         super(channelName);
     }
 
+    protected async fetchChannelInformation(): Promise<void> {
+        const programUrl = `https://twitch.tv/${this.channelName}`;
+        console.info(`Configuring feed for ${programUrl}`);
+        const programResponsePage = await got(programUrl);
+        const $ = cheerio.load(programResponsePage.body);
+
+        this.author = this.channelName;
+        this.description = $('.about-section *').first().text().trim();
+        this.imageUrl = $('.channel-info-content img.tw-image-avatar').attr('src')?.trim();
+        this.ttlInMinutes = 60;
+        this.siteUrl = programUrl;        
+    }
+
     protected async fetchEpisodeList() : Promise<Chapter[]> {
         return new Promise(async (resolve, reject) => {
-            // TODO: Refactor this to a different method
-            const programUrl = `https://twitch.tv/${this.channelName}`;
-            console.info(`Configuring feed for ${programUrl}`);
-            const programResponsePage = await got(programUrl);
-            const $ = cheerio.load(programResponsePage.body);
-    
-            this.author = this.channelName;
-            this.description = $('.about-section *').first().text().trim();
-            this.imageUrl = $('.channel-info-content img.tw-image-avatar').attr('src')?.trim();
-            this.ttlInMinutes = 60;
-            this.siteUrl = programUrl;
-    
             console.log(`Retrieving list of episodes for channel ${this.channelName}.`);
             const opt = {
                 mode: 'json' as const,

@@ -1,4 +1,4 @@
-import { default as cheerio } from 'cheerio';
+import * as cheerio from 'cheerio';
 import { default as got } from 'got';
 import { Chapter } from './Chapter.js';
 
@@ -6,7 +6,8 @@ import { Channel } from './Channel.js';
 
 export class IVooxChannel extends Channel {
 
-    private programUrl? : string;
+    private channelUrl? : string;
+    private channelPageHtml?: string;
 
     constructor(channelName: string) {
         super(channelName);
@@ -17,22 +18,28 @@ export class IVooxChannel extends Channel {
         return new Date(parseInt(parts![4]), parseInt(parts![3]) - 1, parseInt(parts![1]));
     }
 
-    protected async fetchEpisodeList() : Promise<Chapter[]> {
-        console.info(`Configuring feed from ${this.programUrl}`);
-        const programResponsePage = await got(this.programUrl || '');
-        const $ = cheerio.load(programResponsePage.body);
+    protected async fetchChannelInformation(): Promise<void> {
+        console.info(`Configuring feed from ${this.channelUrl}`);
+        const channelResponsePage = await got(this.channelUrl || '');
+        const $ = cheerio.default;
+        this.channelPageHtml = channelResponsePage.body;
+        const $channelPage = $.load(this.channelPageHtml);
 
-        this.channelName = $('h1').text().trim();
-        this.author = $('.info a').text().trim();
-        this.description = $('.overview').text().trim();
-        this.imageUrl = $('.imagen-ficha img').attr('data-src')?.trim();
+        this.channelName = $channelPage('h1').text().trim();
+        this.author = $channelPage('.info a').text().trim();
+        this.description = $channelPage('.overview').text().trim();
+        this.imageUrl = $channelPage('.imagen-ficha img').attr('data-src')?.trim();
         this.ttlInMinutes = 60;
-        this.siteUrl = this.programUrl;
+        this.siteUrl = this.channelUrl;        
+    }
 
+    protected async fetchEpisodeList() : Promise<Chapter[]> {
+        const $channelPage = cheerio.load(this.channelPageHtml || '');
+        const $ = cheerio.load('');
         const chapters = await Promise.all(
-            [...$('.title-wrapper a')]
+            [...$channelPage('.title-wrapper a')]
                 .filter(a => a)
-                .map(a => this.fetchChapterData($(a)?.text().trim(), $(a).attr('href') || ''))
+                .map(a => this.fetchChapterData($(a).text().trim(), $(a).attr('href') || ''))
         );
         return chapters;
     }
@@ -41,16 +48,16 @@ export class IVooxChannel extends Channel {
         console.debug(`Retrieving info for chapter from ${title} (${url}).`);
         const programResponsePage = await got(url);
 
-        const $ = cheerio.load(programResponsePage.body);
+        const $chapterPage = cheerio.load(programResponsePage.body);
 
         const audioUrlTempl = "https://www.ivoox.com/listenembeded_mn_12345678_1.mp3?source=EMBEDEDHTML5";
 
         const id = (url.match(/\d{6,12}/g))![0];
         const audioRealUrl = audioUrlTempl.replace('12345678', id);
 
-        const description = $('.description').text().trim();
+        const description = $chapterPage('.description').text().trim();
 
-        const date = this.fromSpanishDate($('.icon-date:first').text().trim() || '01/01/2099');
+        const date = this.fromSpanishDate($chapterPage('.icon-date:first').text().trim() || '01/01/2099');
 
         const chapter = new Chapter(id, title, audioRealUrl, description, date);
 
@@ -78,12 +85,12 @@ export class IVooxChannel extends Channel {
         console.info(`Creating rss feed.`);
 
         console.debug(`Getting channel ${this.channelName} url.`);
-        this.programUrl = await this.findChannelUrl();
-        if (this.programUrl === undefined) {
+        this.channelUrl = await this.findChannelUrl();
+        if (this.channelUrl === undefined) {
             console.warn(`Channel url not found for ${this.channelName}.`);
             return;
         }
-        console.info(`Channel url is ${this.programUrl}.`);
+        console.info(`Channel url is ${this.channelUrl}.`);
         return super.generateFeed();
     }
 

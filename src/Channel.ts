@@ -15,10 +15,15 @@ export abstract class Channel {
         this.channelName = channelName;
     }
 
+    protected abstract fetchChannelInformation() : Promise<void>;
+    
     protected abstract fetchEpisodeList() : Promise<Chapter[]>;
 
     public async generateFeed(): Promise<string | undefined> {
         console.info(`Creating rss feed.`);
+
+        console.debug(`Getting channel information.`);
+        await this.fetchChannelInformation();
 
         console.debug(`Retrieving list of chapters.`);
         const chapters = await this.fetchEpisodeList();
