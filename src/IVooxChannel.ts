@@ -22,12 +22,12 @@ export class IVooxChannel extends Channel {
         const programResponsePage = await got(this.programUrl || '');
         const $ = cheerio.load(programResponsePage.body);
 
-        super.channelName = $('h1').text().trim();
-        super.author = $('.info a').text().trim();
-        super.description = $('.overview').text().trim();
-        super.imageUrl = $('.imagen-ficha img').attr('data-src')?.trim();
-        super.ttlInMinutes = 60;
-        super.siteUrl = this.programUrl;
+        this.channelName = $('h1').text().trim();
+        this.author = $('.info a').text().trim();
+        this.description = $('.overview').text().trim();
+        this.imageUrl = $('.imagen-ficha img').attr('data-src')?.trim();
+        this.ttlInMinutes = 60;
+        this.siteUrl = this.programUrl;
 
         const chapters = await Promise.all(
             [...$('.title-wrapper a')]
@@ -37,7 +37,7 @@ export class IVooxChannel extends Channel {
         return chapters;
     }
 
-    protected async fetchChapterData(title: string, url: string): Promise<Chapter> {
+    private async fetchChapterData(title: string, url: string): Promise<Chapter> {
         console.debug(`Retrieving info for chapter from ${title} (${url}).`);
         const programResponsePage = await got(url);
 

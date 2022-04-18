@@ -9,9 +9,6 @@ import { IVooxChannel } from './IVooxChannel.js';
 import { TwitchChannel } from './TwitchChannel.js';
 
 
-await TwitchChannel.initializeWitchSubsystem();
-
-
 const FASTIFY_STATIC = '/tmp/public';
 const ASSETS_DIRECTORY = `${path.resolve('.')}/assets/`;
 

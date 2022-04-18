@@ -17,8 +17,6 @@ export abstract class Channel {
 
     protected abstract fetchEpisodeList() : Promise<Chapter[]>;
 
-    protected abstract fetchChapterData(title: string, url: string): Promise<Chapter>;
-
     public async generateFeed(): Promise<string | undefined> {
         console.info(`Creating rss feed.`);
 
