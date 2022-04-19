@@ -31,9 +31,12 @@ export class TwitchChannel extends Channel{
 
     static twitchDlPath : string;
     static downloadingEpisodes : { [key: string]: boolean; } = {};
+    
+    chapterUrlPrefix: string;
 
-    constructor(channelName: string) {
+    constructor(channelName: string, chapterUrlPrefix : string) {
         super(channelName);
+        this.chapterUrlPrefix = chapterUrlPrefix;
     }
 
     protected async fetchChannelInformation(): Promise<void> {
@@ -65,7 +68,7 @@ export class TwitchChannel extends Channel{
                 console.log('List of episodes retrieved.');
                 const twitchChapters = results as TwitchChannelData[];
                 const chapters = twitchChapters[0].videos.map(tc => new Chapter(
-                    tc.id, tc.title, `/twitch/${this.channelName}/${tc.id}`, tc.title, new Date(tc.publishedAt)
+                    tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.channelName}/${tc.id}`, tc.title, new Date(tc.publishedAt)
                 ));
                 resolve(chapters);
             });

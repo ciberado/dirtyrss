@@ -38,7 +38,8 @@ interface HttpRequest {
 app.get('/twitch/:showId', async (req, reply) => {
     const request = req as HttpRequest;
     try {
-        const tc = new TwitchChannel(request.params.showId);
+        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}`;
+        const tc = new TwitchChannel(request.params.showId, chapterUrlPrefix);
         const xmlFeed = await tc.generateFeed();
         reply.send(xmlFeed);            
     } catch (err) {
@@ -51,7 +52,8 @@ app.get('/twitch/:showId/:episodeId', async (req, reply) => {
     const request = req as HttpRequest;
 
     try {
-        const tc = new TwitchChannel(request.params.showId);
+        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}`;
+        const tc = new TwitchChannel(request.params.showId, chapterUrlPrefix);
         const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, request.params.episodeId);
         const url = fileName ? fileName.substring(FASTIFY_STATIC.length) : 'downloading.mp3';
         reply.download(url);    
