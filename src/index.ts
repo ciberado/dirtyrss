@@ -49,10 +49,15 @@ app.get('/twitch/:showId', async (req, reply) => {
 app.get('/twitch/:showId/:episodeId', async (req, reply) => {
     const request = req as HttpRequest;
 
-    const tc = new TwitchChannel(request.params.showId);
-    const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, request.params.episodeId);
-    const url = fileName ? fileName.substring(FASTIFY_STATIC.length) : 'downloading.mp3';
-    reply.download(url);
+    try {
+        const tc = new TwitchChannel(request.params.showId);
+        const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, request.params.episodeId);
+        const url = fileName ? fileName.substring(FASTIFY_STATIC.length) : 'downloading.mp3';
+        reply.download(url);    
+    } catch (err) {
+        console.warn(err);
+        reply.code(404).type('text/html').send(`Error downloading ${request.params.episodeId} of ${request.params.episodeId} (${err}).`);
+    }
 });
 
 
