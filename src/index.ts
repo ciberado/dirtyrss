@@ -8,6 +8,7 @@ import { IVooxChannel } from './IVooxChannel.js';
 
 import { TwitchChannel } from './TwitchChannel.js';
 
+const FASTIFY_PORT = process.env.PORT || 3000;
 
 const FASTIFY_STATIC = '/tmp/public';
 const ASSETS_DIRECTORY = `${path.resolve('.')}/assets/`;
@@ -86,6 +87,6 @@ app.get('/ivoox/:showId', async (req, reply) => {
     await processIVooxRequest( req as HttpRequest, reply);
 });
 
-app.listen(3000, '0.0.0.0', function (err, address) {
-    console.log(`Server started at port 3000.`);
+app.listen(FASTIFY_PORT, '0.0.0.0', function (err, address) {
+    console.log(`Server started at port ${FASTIFY_PORT}.`);
 });
