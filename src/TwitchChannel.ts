@@ -79,6 +79,10 @@ export class TwitchChannel extends Channel{
                 console.log(`Episode ${episodeId} already being downloaded.`);
                 return;
             }
+            const dir = path.dirname(fileName);
+            if (!fs.existsSync(dir)){
+                fs.mkdirSync(dir, { recursive: true });
+            }
             const opt = {
                 mode: 'text' as const,
                 pythonPath: '/usr/bin/python3',
