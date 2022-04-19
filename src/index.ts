@@ -51,7 +51,7 @@ app.get('/twitch/:showId/:episodeId', async (req, reply) => {
 
     const tc = new TwitchChannel(request.params.showId);
     const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, request.params.episodeId);
-    const url = fileName ? fileName.substring(FASTIFY_STATIC.length) : 'downloading.aac';
+    const url = fileName ? fileName.substring(FASTIFY_STATIC.length) : 'downloading.mp3';
     reply.download(url);
 });
 
