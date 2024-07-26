@@ -18,11 +18,8 @@ export class IVooxChannel extends Channel {
         const day = parseInt(parts[0], 10);
         const month = parseInt(parts[1], 10) - 1;
         const year = parseInt(parts[2], 10);
-        const hour = parseInt(parts[3], 10);
-        const minute = parseInt(parts[4], 10);
-        const seccond = parseInt(parts[5], 10);
-    
-        return new Date(year, month, day, hour, minute, seccond);
+       
+        return new Date(year, month, day);
     }
 
     protected async fetchChannelInformation(): Promise<void> {
@@ -62,9 +59,9 @@ export class IVooxChannel extends Channel {
         const id = (url.match(/\d{6,12}/g))![0];
         const audioRealUrl = audioUrlTempl.replace('12345678', id);
 
-        const description = $chapterPage('.d-flex > h1').text().trim();
+        const description = $chapterPage('.layout-2-colums > div:first').text().trim();
 
-        const date = this.fromSpanishDate($chapterPage('.text-medium.ml-sm-1').text().trim() || '01/01/2000');
+        const date = this.fromSpanishDate($chapterPage('.text-medium.ml-sm-1').text().split('·')[0].trim() || '01/01/2000');
 
         const chapter = new Chapter(id, title, audioRealUrl, description, date);
 
