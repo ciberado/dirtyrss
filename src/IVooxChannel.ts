@@ -52,6 +52,8 @@ export class IVooxChannel extends Channel {
         console.debug(`Retrieving info for chapter from ${title} (${url}).`);
         const programResponsePage = await got(url);
 
+        console.info(url);
+
         const $chapterPage = cheerio.load(programResponsePage.body);
 
         const audioUrlTempl = "https://www.ivoox.com/listenembeded_mn_12345678_1.mp3?source=EMBEDEDHTML5";
@@ -59,9 +61,9 @@ export class IVooxChannel extends Channel {
         const id = (url.match(/\d{6,12}/g))![0];
         const audioRealUrl = audioUrlTempl.replace('12345678', id);
 
-        const description = $chapterPage('.layout-2-colums > div:first').text().trim();
+        const description = $chapterPage('div.mb-3 > div > p.text-truncate-5').text().trim();
 
-        const date = this.fromSpanishDate($chapterPage('.text-medium.ml-sm-1').text().split('·')[0].trim() || '01/01/2000');
+        const date = this.fromSpanishDate($chapterPage('span.text-medium.ml-sm-1').text().split('·')[0].trim() || '01/01/2000');
 
         const chapter = new Chapter(id, title, audioRealUrl, description, date);
 
