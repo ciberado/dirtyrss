@@ -15,14 +15,14 @@ export class IVooxChannel extends Channel {
 
     private fromSpanishDate(text: string): Date {
         const parts = text.split(/[\/·:]/);
-        const dia = parseInt(parts[0], 10);
-        const mes = parseInt(parts[1], 10) - 1;
-        const anio = parseInt(parts[2], 10);
-        const hora = parseInt(parts[3], 10);
-        const minutos = parseInt(parts[4], 10);
-        const segundos = parseInt(parts[5], 10);
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        const hour = parseInt(parts[3], 10);
+        const minute = parseInt(parts[4], 10);
+        const seccond = parseInt(parts[5], 10);
     
-        return new Date(anio, mes, dia, hora, minutos, segundos);
+        return new Date(year, month, day, hour, minute, seccond);
     }
 
     protected async fetchChannelInformation(): Promise<void> {
@@ -64,7 +64,7 @@ export class IVooxChannel extends Channel {
 
         const description = $chapterPage('.d-flex > h1').text().trim();
 
-        const date = this.fromSpanishDate($chapterPage('.text-medium.ml-sm-1').text().trim() || '01/01/2099');
+        const date = this.fromSpanishDate($chapterPage('.text-medium.ml-sm-1').text().trim() || '01/01/2000');
 
         const chapter = new Chapter(id, title, audioRealUrl, description, date);
 
