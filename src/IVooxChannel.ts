@@ -65,7 +65,9 @@ export class IVooxChannel extends Channel {
 
         const date = this.fromSpanishDate($chapterPage('span.text-medium.ml-sm-1').text().split('·')[0].trim() || '01/01/2000');
 
-        const chapter = new Chapter(id, title, audioRealUrl, description, date);
+        const img = $chapterPage('.d-flex > .image-wrapper.pr-2 > img').attr('data-lazy-src') || ''
+
+        const chapter = new Chapter(id, title, audioRealUrl, description, date, img);
 
         return chapter;
     }        
