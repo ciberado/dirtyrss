@@ -69,7 +69,7 @@ export class TwitchChannel extends Channel{
                 const twitchChapters = results as TwitchChannelData[];
                 const chapters = !twitchChapters ? [] :
                     twitchChapters[0].videos.map(tc => new Chapter(
-                    tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.channelName}/${tc.id}`, tc.title, new Date(tc.publishedAt)
+                    tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.channelName}/${tc.id}`, tc.title, new Date(tc.publishedAt), ''
                 ));
                 resolve(chapters);
             });

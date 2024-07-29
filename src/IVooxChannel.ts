@@ -14,8 +14,12 @@ export class IVooxChannel extends Channel {
     }
 
     private fromSpanishDate(text: string): Date {
-        const parts = text.match(/^([0-2][0-9]|3[0-1])(\/|-)(0[1-9]|1[0-2])\2(\d{4})$/);
-        return new Date(parseInt(parts![4]), parseInt(parts![3]) - 1, parseInt(parts![1]));
+        const parts = text.split(/[\/·:]/);
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+       
+        return new Date(year, month, day);
     }
 
     protected async fetchChannelInformation(): Promise<void> {
@@ -48,6 +52,8 @@ export class IVooxChannel extends Channel {
         console.debug(`Retrieving info for chapter from ${title} (${url}).`);
         const programResponsePage = await got(url);
 
+        console.info(url);
+
         const $chapterPage = cheerio.load(programResponsePage.body);
 
         const audioUrlTempl = "https://www.ivoox.com/listenembeded_mn_12345678_1.mp3?source=EMBEDEDHTML5";
@@ -55,11 +61,16 @@ export class IVooxChannel extends Channel {
         const id = (url.match(/\d{6,12}/g))![0];
         const audioRealUrl = audioUrlTempl.replace('12345678', id);
 
-        const description = $chapterPage('.description').text().trim();
+        const description = $chapterPage('div.mb-3 > div > p.text-truncate-5').text().trim();
 
-        const date = this.fromSpanishDate($chapterPage('.icon-date:first').text().trim() || '01/01/2099');
+        const date = this.fromSpanishDate($chapterPage('span.text-medium.ml-sm-1').text().split('·')[0].trim() || '01/01/2000');
 
-        const chapter = new Chapter(id, title, audioRealUrl, description, date);
+        let img = ($chapterPage('.d-flex > .image-wrapper.pr-2 > img').attr('data-lazy-src') || '');
+        if (img.includes('url=')) {
+            img = img.split('url=')[1];
+        }
+
+        const chapter = new Chapter(id, title, audioRealUrl, description, date, img);
 
         return chapter;
     }        
