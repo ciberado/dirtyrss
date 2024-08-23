@@ -33,6 +33,13 @@ export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || pr
 nvm install 16.1
 ```
 
+* Instala otros prerequisitos:
+
+```bash
+sudo apt update
+sudo apt install -y python3 ffmpeg
+```
+
 * Descarga *DirtyRSS* y sus dependencias, después compila
 
 ```bash
