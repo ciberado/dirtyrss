@@ -39,8 +39,7 @@ nvm install 16.1
 git clone https://github.com/ciberado/dirtyrss
 cd dirtyrss
 npm i
-PATH=$PATH:$(npm bin)
-tsc
+npx tsc
 ```
 
 * Lanza el programa:
