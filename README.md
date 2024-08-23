@@ -5,6 +5,9 @@ suficientes como para coger el teclado y montar un scrapper de los podcasts para
 De esta manera puedo apuntar mi podcatcher favorito a este servidor y subscribirme a ellos de la misma manera
 que lo hago con cualquier otra fuente de shows.
 
+También puedes utilizar el servicio para generar feeds contra canales de Twitch. Revisa los [ejemplos](https://github.com/ciberado/dirtyrss?tab=readme-ov-file#obteniendo-feeds)
+para entender cómo encontrar el canal o podcast que te interese.
+
 *Importante: por mucha tirria que les tenga a los de Ivoox por crear otro [walled garden](https://blog.tail.digital/es/sabes-lo-que-es-walled-garden/)
 en esta porquería de web que se nos está quedando, no creo que sea ético implementar este
 tipo de proxies como un servicio disponible para todo el mundo. En otras palabras: tengo la conciencia muy
@@ -52,7 +55,8 @@ Invoca la dirección del servidor en el que estás ejecutando *DirtyRSS* pasando
 quieres escuchar como parámetro `podcast`. Por ejemplo:
 
 ```bash
-http://<IP DE TU SERVIDOR>/?podcast=la voz de horus
+http://<IP DE TU SERVIDOR>/ivoox/todopoderosos
+http://<IP DE TU SERVIDOR>/twitch/srevolution
 ```
 
 Obtendrás el feed RSS correspondiente. Ahora solo tienes que compartirlo con tu podcatcher.
@@ -70,6 +74,6 @@ las vacaciones de navidades. A mi me sirve, pero hay optimizaciones obvias que e
 - [x] ~Revisar por qué algunos programas parece que no se descargan correctamente~
 - [ ] Documentar mejor el código antes de que crezca
 - [ ] Montar una batería de tests
-- [ ] Generar podcasts a partir de otras fuentes, como Twitch
+- [x] Generar podcasts a partir de otras fuentes, como Twitch
 
 Si te animas, coméntamelo y te cuento cómo hackear el código. Ya sabes dónde encontrarme: http://twitter.com/ciberado.
