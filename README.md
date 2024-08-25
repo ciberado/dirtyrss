@@ -55,6 +55,14 @@ npx tsc
 npm run start
 ```
 
+## Ejecutando con Docker
+
+Nota: Probablemente no querrás utilizar el puerto 80 a menos que tu red sea de confianza.
+
+```bash
+docker run -it -p 80:3000 dirtyrss
+```
+
 ## Obteniendo feeds
 
 Invoca la dirección del servidor en el que estás ejecutando *DirtyRSS* pasando el nombre del programa que
