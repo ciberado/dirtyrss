@@ -60,7 +60,7 @@ npm run start
 Nota: Probablemente no querrás utilizar el puerto 80 a menos que tu red sea de confianza.
 
 ```bash
-docker run ciberado/dirtyrss -p 80:3000 dirtyrss
+docker run -p 80:3000 ciberado/dirtyrss
 ```
 
 ## Obteniendo feeds
