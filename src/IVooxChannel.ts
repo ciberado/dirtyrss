@@ -1,7 +1,6 @@
 import * as cheerio from 'cheerio';
 import { default as got } from 'got';
 import { Chapter } from './Chapter.js';
-
 import { Channel } from './Channel.js';
 
 export class IVooxChannel extends Channel {
@@ -18,7 +17,7 @@ export class IVooxChannel extends Channel {
         const day = parseInt(parts[0], 10);
         const month = parseInt(parts[1], 10) - 1;
         const year = parseInt(parts[2], 10);
-       
+
         return new Date(year, month, day);
     }
 
@@ -30,29 +29,32 @@ export class IVooxChannel extends Channel {
         const $channelPage = $.load(this.channelPageHtml);
 
         this.channelName = $channelPage('h1').text().trim();
-        this.author = $channelPage('.info a').text().trim();
-        this.description = $channelPage('.overview').text().trim();
-        this.imageUrl = $channelPage('.imagen-ficha img').attr('data-src')?.trim();
+        this.author = $channelPage('.d-flex > .text-medium > . a').text().trim();
+        this.description = $channelPage('.d-flex > .d-none > .text-truncate-3').text().trim();
+        this.imageUrl = $channelPage('.d-flex > .image-wrapper.pr-2 > img').attr('data-lazy-src')?.trim();
         this.ttlInMinutes = 60;
-        this.siteUrl = this.channelUrl;        
+        this.siteUrl = this.channelUrl;
+
+        console.info(`Podcast image: ${this.imageUrl}`);
     }
 
     protected async fetchEpisodeList() : Promise<Chapter[]> {
         const $channelPage = cheerio.load(this.channelPageHtml || '');
         const $ = cheerio.load('');
+
+        const selector = `.pl-1 > .d-flex > .d-flex > .w-100 > a`
+
         const chapters = await Promise.all(
-            [...$channelPage('.title-wrapper a')]
+              [...$channelPage(selector)]
                 .filter(a => a)
-                .map(a => this.fetchChapterData($(a).text().trim(), $(a).attr('href') || ''))
+                .map(a => this.fetchChapterData($(a).text().trim(), `https://ivoox.com${$(a).attr('href')}` || ''))
         );
         return chapters;
     }
 
     private async fetchChapterData(title: string, url: string): Promise<Chapter> {
-        console.debug(`Retrieving info for chapter from ${title} (${url}).`);
+        console.debug(`Retrieving info for chapter ${title} (${url}).`);
         const programResponsePage = await got(url);
-
-        console.info(url);
 
         const $chapterPage = cheerio.load(programResponsePage.body);
 
@@ -73,7 +75,7 @@ export class IVooxChannel extends Channel {
         const chapter = new Chapter(id, title, audioRealUrl, description, date, img);
 
         return chapter;
-    }        
+    }
 
     private async findChannelUrl(): Promise<string | undefined> {
         console.info(`Searching for the program "${this.channelName}"`);
@@ -92,9 +94,8 @@ export class IVooxChannel extends Channel {
         return programUrl;
     }
 
-    public async generateFeed(): Promise<string | undefined> {
+   public async generateFeed(): Promise<string | undefined> {
         console.info(`Creating rss feed.`);
-
         console.debug(`Getting channel ${this.channelName} url.`);
         this.channelUrl = await this.findChannelUrl();
         if (this.channelUrl === undefined) {
@@ -104,5 +105,5 @@ export class IVooxChannel extends Channel {
         console.info(`Channel url is ${this.channelUrl}.`);
         return super.generateFeed();
     }
-
 }
+//# sourceMappingURL=IVooxChannel.js.map
