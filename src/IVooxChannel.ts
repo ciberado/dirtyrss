@@ -1,12 +1,24 @@
 import * as cheerio from 'cheerio';
+import { pRateLimit } from 'p-ratelimit';
 import { default as got } from 'got';
 import { Chapter } from './Chapter.js';
 import { Channel } from './Channel.js';
 
 export class IVooxChannel extends Channel {
 
+    private static readonly MAX_CHAPTERS_PER_PAGE = 20;
+    private static readonly MAX_CALLS_PER_SECOND = 90;
+
     private channelUrl? : string;
     private channelPageHtml?: string;
+    private numChapters?:number;
+
+    private static limit = pRateLimit({
+        interval: 1000,             // 1000 ms == 1 second
+        rate: IVooxChannel.MAX_CALLS_PER_SECOND,                   // 60 API calls per interval
+        concurrency: IVooxChannel.MAX_CALLS_PER_SECOND*1.2,            // no more than 80 running at once
+        maxDelay: 5 * 60000              // an API call delayed > 2 sec is rejected
+    });
 
     constructor(channelName: string) {
         super(channelName);
@@ -34,15 +46,39 @@ export class IVooxChannel extends Channel {
         this.imageUrl = $channelPage('.d-flex > .image-wrapper.pr-2 > img').attr('data-lazy-src')?.trim();
         this.ttlInMinutes = 60;
         this.siteUrl = this.channelUrl;
-
-        console.info(`Podcast image: ${this.imageUrl}`);
+        this.numChapters = parseInt($channelPage('.stat > .text-gray:first').text().replace('.','').trim());
+        this.link = this.channelUrl;
     }
 
-    protected async fetchEpisodeList() : Promise<Chapter[]> {
-        const $channelPage = cheerio.load(this.channelPageHtml || '');
+    protected async fetchEpisodeList(): Promise<Chapter[]> {
+        console.log(`Chapters: ${this.numChapters}`);
+        //SI PEDIMOS DEMASIADAS PAGINAS SE DENIEGAN LAS PETICIONES, IMPLEMENTAR RATE LIMIT
+        const maxPageNumber = Math.min(this.numChapters? await this.calculateMaxPageNumber() : 1, 999);
+        const pageNumbers = Array.from({ length: maxPageNumber }, (_, i) => i + 1);
+    
+        const allChapters = await Promise.all(
+            pageNumbers.map(page => this.fetchPageEpisodeList(page))
+        );
+    
+        return allChapters.flat();
+    }
+
+    private async calculateMaxPageNumber() : Promise<number> {
+        return this.numChapters?Math.ceil(this.numChapters/IVooxChannel.MAX_CHAPTERS_PER_PAGE):3;
+    }
+
+    private async fetchPageEpisodeList(pageNumber: number) : Promise<Chapter[]> {
+
         const $ = cheerio.load('');
 
-        const selector = `.pl-1 > .d-flex > .d-flex > .w-100 > a`
+        const currentPageUrl = this.channelUrl?.replace('_1.html', `_${pageNumber}.html`);
+        console.log(`++Fetching page ${pageNumber} from ${currentPageUrl}`);
+
+        const channelResponsePage = await IVooxChannel.limit(async () => await got(currentPageUrl || ''));
+        const $channelPage = cheerio.load(channelResponsePage.body || '');
+        
+
+        const selector = `.pl-1 > .d-flex > .d-flex > .w-100 > a`;
 
         const chapters = await Promise.all(
               [...$channelPage(selector)]
@@ -53,8 +89,9 @@ export class IVooxChannel extends Channel {
     }
 
     private async fetchChapterData(title: string, url: string): Promise<Chapter> {
-        console.debug(`Retrieving info for chapter ${title} (${url}).`);
-        const programResponsePage = await got(url);
+        
+        const programResponsePage = await IVooxChannel.limit(async () => await got(url));
+        console.debug(`Retrieved info for podcast "${this.channelName}" chapter "${title}", url=(${url}).`);
 
         const $chapterPage = cheerio.load(programResponsePage.body);
 
@@ -67,10 +104,11 @@ export class IVooxChannel extends Channel {
 
         const date = this.fromSpanishDate($chapterPage('span.text-medium.ml-sm-1').text().split('·')[0].trim() || '01/01/2000');
 
-        let img = ($chapterPage('.d-flex > .image-wrapper.pr-2 > img').attr('data-lazy-src') || '');
+        let img = ($chapterPage('.d-flex > .image-wrapper.pr-2 > img').attr('data-lazy-src') || '').trim();
         if (img.includes('url=')) {
             img = img.split('url=')[1];
         }
+        img = `https://img-static.ivoox.com/index.php?w=256&h=256&url=${img}`;
 
         const chapter = new Chapter(id, title, audioRealUrl, description, date, img);
 

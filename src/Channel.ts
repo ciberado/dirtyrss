@@ -10,6 +10,7 @@ export abstract class Channel {
     protected imageUrl?: string;
     protected author?: string;
     protected ttlInMinutes?: number;
+    protected link?: string;
 
     constructor(channelName : string) {
         this.channelName = channelName;
@@ -34,7 +35,9 @@ export abstract class Channel {
             author: this.author,
             description: this.description,
             imageUrl: this.imageUrl,
-            ttl: this.ttlInMinutes
+            ttl: this.ttlInMinutes,
+            siteUrl: this.link,
+            generator: 'dirtyrss'
         });
 
         chapters.forEach(c => {
