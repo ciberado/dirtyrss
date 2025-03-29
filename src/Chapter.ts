@@ -5,14 +5,16 @@ export class Chapter {
     private _description: string;
     private _date: Date;
     private _image: string;
+    private _duration: string;
 
-    constructor(id: string, title: string, fileUrl: string, description: string, date: Date, image: string) {
+    constructor(id: string, title: string, fileUrl: string, description: string, date: Date, image: string, duration: string) {
         this._id = id;
         this._title = title;
         this._fileUrl = fileUrl;
         this._description = description;
         this._date = date;
         this._image = image;
+        this._duration = duration;
     }
 
     public get id() {
@@ -37,5 +39,9 @@ export class Chapter {
 
     public get image() {
         return this._image;
+    }
+
+    public get duration() {
+        return this._duration;
     }
 }

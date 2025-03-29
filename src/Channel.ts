@@ -45,7 +45,9 @@ export abstract class Channel {
                 title: c.title,
                 date: c.date.toUTCString(),
                 description: c.description,
+                imageUrl: c.image,
                 itunesImage : c.image,
+                itunesDuration : c.duration,
                 enclosure: {
                     url: c.fileUrl,
                     type: 'audio/mpeg'

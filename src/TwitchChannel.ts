@@ -47,7 +47,7 @@ export class TwitchChannel extends Channel{
 
         this.author = this.channelName;
         this.description = $('.about-section *').first().text().trim();
-        this.imageUrl = $('.channel-info-content img.tw-image-avatar').attr('src')?.trim();
+        this.imageUrl = $('.tw-avatar img.tw-image-avatar').attr('src')?.trim();
         this.ttlInMinutes = 60;
         this.siteUrl = programUrl;        
     }
@@ -69,7 +69,7 @@ export class TwitchChannel extends Channel{
                 const twitchChapters = results as TwitchChannelData[];
                 const chapters = !twitchChapters ? [] :
                     twitchChapters[0].videos.map(tc => new Chapter(
-                    tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.channelName}/${tc.id}`, tc.title, new Date(tc.publishedAt), ''
+                    tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.channelName}/${tc.id}`, tc.title, new Date(tc.publishedAt), '', ''
                 ));
                 resolve(chapters);
             });
@@ -153,4 +153,4 @@ try {
     console.error(err);
     process.exit(1);
 }
-
+//# sourceMappingURL=TwitchChannel.js.map

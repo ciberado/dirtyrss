@@ -3,6 +3,7 @@ import { pRateLimit } from 'p-ratelimit';
 import { default as got } from 'got';
 import { Chapter } from './Chapter.js';
 import { Channel } from './Channel.js';
+import NodeCache from 'node-cache';
 
 export class IVooxChannel extends Channel {
 
@@ -12,13 +13,6 @@ export class IVooxChannel extends Channel {
     private channelUrl? : string;
     private channelPageHtml?: string;
     private numChapters?:number;
-
-    private static limit = pRateLimit({
-        interval: 1000,             // 1000 ms == 1 second
-        rate: IVooxChannel.MAX_CALLS_PER_SECOND,                   // 60 API calls per interval
-        concurrency: IVooxChannel.MAX_CALLS_PER_SECOND*1.2,            // no more than 80 running at once
-        maxDelay: 5 * 60000              // an API call delayed > 2 sec is rejected
-    });
 
     constructor(channelName: string) {
         super(channelName);
@@ -52,7 +46,6 @@ export class IVooxChannel extends Channel {
 
     protected async fetchEpisodeList(): Promise<Chapter[]> {
         console.log(`Chapters: ${this.numChapters}`);
-        //SI PEDIMOS DEMASIADAS PAGINAS SE DENIEGAN LAS PETICIONES, IMPLEMENTAR RATE LIMIT
         const maxPageNumber = Math.min(this.numChapters? await this.calculateMaxPageNumber() : 1, 999);
         const pageNumbers = Array.from({ length: maxPageNumber }, (_, i) => i + 1);
     
@@ -89,6 +82,12 @@ export class IVooxChannel extends Channel {
     }
 
     private async fetchChapterData(title: string, url: string): Promise<Chapter> {
+        const cacheKey = `chapter_${url}`;
+        
+        const cachedChapter = IVooxChannel.chapterCache.get<Chapter>(cacheKey);
+        if (cachedChapter) {
+            return cachedChapter;
+        }
         
         const programResponsePage = await IVooxChannel.limit(async () => await got(url));
         console.debug(`Retrieved info for podcast "${this.channelName}" chapter "${title}", url=(${url}).`);
@@ -103,14 +102,17 @@ export class IVooxChannel extends Channel {
         const description = $chapterPage('div.mb-3 > div > p.text-truncate-5').text().trim();
 
         const date = this.fromSpanishDate($chapterPage('span.text-medium.ml-sm-1').text().split('·')[0].trim() || '01/01/2000');
+        const duration = $chapterPage('span.text-medium.ml-sm-1').text().split('·')[1].trim() || '00:00';
 
         let img = ($chapterPage('.d-flex > .image-wrapper.pr-2 > img').attr('data-lazy-src') || '').trim();
         if (img.includes('url=')) {
             img = img.split('url=')[1];
         }
-        img = `https://img-static.ivoox.com/index.php?w=256&h=256&url=${img}`;
+        img = `https://img-static.ivoox.com/index.php?w=175&h=175&url=${img}`;
 
-        const chapter = new Chapter(id, title, audioRealUrl, description, date, img);
+        const chapter = new Chapter(id, title, audioRealUrl, description, date, img, duration);
+        
+        IVooxChannel.chapterCache.set(cacheKey, chapter);
 
         return chapter;
     }
@@ -143,5 +145,17 @@ export class IVooxChannel extends Channel {
         console.info(`Channel url is ${this.channelUrl}.`);
         return super.generateFeed();
     }
+
+    private static limit = pRateLimit({
+        interval: 1000,             // 1000 ms == 1 second
+        rate: IVooxChannel.MAX_CALLS_PER_SECOND,                   // 60 API calls per interval
+        concurrency: IVooxChannel.MAX_CALLS_PER_SECOND*1.2,            // no more than 80 running at once
+        maxDelay: 5 * 60000              // an API call delayed > 2 sec is rejected
+    });
+
+    private static chapterCache: NodeCache = new NodeCache({ 
+        stdTTL: 3600*24, // Tiempo de vida en segundos
+        checkperiod: 600 // Verificar expiración cada 60 minutos
+    });
 }
 //# sourceMappingURL=IVooxChannel.js.map
