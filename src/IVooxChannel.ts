@@ -241,15 +241,10 @@ export class IVooxChannel extends Channel {
     }
 
     private static limit = pRateLimit({
-        interval: 1000,             // 1000 ms == 1 second
-        rate: IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND,                   // 60 API calls per interval
-        concurrency: IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND*1.2,            // no more than 80 running at once
-        maxDelay: 5 * 60000              // an API call delayed > 2 sec is rejected
-    });
-
-    private static pageCache: NodeCache = new NodeCache({ 
-        stdTTL: 60*30, // Tiempo de vida en segundos
-        checkperiod: 60*30 // Verificar expiración cada 60 minutos
+        interval: 1000,
+        rate: IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND,
+        concurrency: IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND*1.2,
+        maxDelay: 5 * 60000
     });
 
     private static chapterCache: NodeCache = new NodeCache({ 
