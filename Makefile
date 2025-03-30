@@ -5,6 +5,9 @@ build:
 	npm install
 	npm run tsc
 
+run:build
+	npm run start
+
 docker-install:clean build
 	docker container create --name dirtyrss --pull never -l com.centurylinklabs.watchtower.enable=false -l wud.watch=false --restart always --publish 3000:3000 ciberado/dirtyrss
 

@@ -1,5 +1,6 @@
 import { Podcast } from 'podcast';
 import { Chapter } from './Chapter.js';
+import { performance } from 'perf_hooks';
 
 export abstract class Channel {
     
@@ -27,8 +28,10 @@ export abstract class Channel {
         await this.fetchChannelInformation();
 
         console.debug(`Retrieving list of chapters.`);
+        const startTime = performance.now();
         const chapters = await this.fetchEpisodeList();
-        console.info(`${chapters.length} chapters found for channel ${this.channelName}.`);
+        const endTime = performance.now();
+        console.info(`${chapters.length} chapters found for channel ${this.channelName} in ${endTime - startTime} ms.`);
 
         const feed = new Podcast({
             title: this.channelName,

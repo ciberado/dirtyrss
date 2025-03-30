@@ -7,12 +7,13 @@ import NodeCache from 'node-cache';
 
 export class IVooxChannel extends Channel {
 
-    private static readonly MAX_CHAPTERS_PER_PAGE = 20;
-    private static readonly MAX_CALLS_PER_SECOND = 90;
+    private static readonly IVOOX_FETCH_TIMEOUT_MS = 10000;
+    private static readonly IVOOX_FETCH_PAGES_BATCH_SIZE = 15;
+    private static readonly IVOOX_MAX_CALLS_PER_SECOND = 95;
 
     private channelUrl? : string;
     private channelPageHtml?: string;
-    private numChapters?:number;
+    private numChapters:number = 0;
 
     constructor(channelName: string) {
         super(channelName);
@@ -44,20 +45,88 @@ export class IVooxChannel extends Channel {
         this.link = this.channelUrl;
     }
 
+    // protected async fetchEpisodeList(): Promise<Chapter[]> {
+    //     console.log(`Chapters: ${this.numChapters}`);
+    //     const maxPageNumber = Math.min(this.numChapters? await this.calculateMaxPageNumber() : 1, 999);
+    //     const pageNumbers = Array.from({ length: maxPageNumber }, (_, i) => i + 1);
+    
+    //     const allChapters = await Promise.all(
+    //         pageNumbers.map(page => this.fetchPageEpisodeList(page))
+    //     );
+    
+    //     return allChapters.flat();
+    // }
+
     protected async fetchEpisodeList(): Promise<Chapter[]> {
         console.log(`Chapters: ${this.numChapters}`);
-        const maxPageNumber = Math.min(this.numChapters? await this.calculateMaxPageNumber() : 1, 999);
-        const pageNumbers = Array.from({ length: maxPageNumber }, (_, i) => i + 1);
+        const pageNumbers = Array.from({ length: this.numChapters }, (_, i) => i + 1);
+        
+        let collectedChapters: Chapter[] = [];
+        let timeoutReached = false;
     
-        const allChapters = await Promise.all(
-            pageNumbers.map(page => this.fetchPageEpisodeList(page))
-        );
+        // Crear un Promise que se resuelva después del timeout
+        const timeoutPromise = new Promise<Chapter[]>((_, reject) => {
+            setTimeout(() => {
+                timeoutReached = true;
+                reject(new Error('Timeout reached'));
+            }, IVooxChannel.IVOOX_FETCH_TIMEOUT_MS);
+        });
     
-        return allChapters.flat();
+        try {
+            // Dividir las páginas en lotes de 10
+            for (let i = 0; i < pageNumbers.length && !timeoutReached; i += IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE) {
+                const batch = pageNumbers.slice(i, i + IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE);
+                
+                try {
+                    // Procesar el lote actual
+                    const batchResults = await Promise.race([
+                        Promise.all(batch.map(page => this.fetchPageEpisodeList(page))),
+                        timeoutPromise
+                    ]);
+    
+                    collectedChapters.push(...batchResults.flat());
+                } catch (error) {
+                    if (timeoutReached && collectedChapters.length < this.numChapters) {
+                        // Iniciar carga en background para las páginas restantes
+                        const remainingPages = pageNumbers.slice(i + batch.length);
+                        if (remainingPages.length > 0) {
+                            this.continueLoadingInBackground(remainingPages, collectedChapters);
+                        }
+                        break;
+                    }
+                    throw error;
+                }
+            }
+        } catch (error) {
+            if (!timeoutReached) {
+                throw error;
+            }
+        }
+    
+        collectedChapters.sort((a, b) => b.date.getTime() - a.date.getTime());
+        return collectedChapters;
     }
-
-    private async calculateMaxPageNumber() : Promise<number> {
-        return this.numChapters?Math.ceil(this.numChapters/IVooxChannel.MAX_CHAPTERS_PER_PAGE):3;
+    
+    private async continueLoadingInBackground(remainingPages: number[], existingChapters: Chapter[]): Promise<void> {
+        console.log(`Continuing chapter fetch in background for ${remainingPages.length} remaining pages`);
+        
+        try {
+            const backgroundPromises = remainingPages.map(async (page) => {
+                try {
+                    return await this.fetchPageEpisodeList(page);
+                } catch (error) {
+                    console.error(`Error fetching page ${page} in background:`, error);
+                    return [];
+                }
+            });
+    
+            const newChapters = (await Promise.all(backgroundPromises))
+                .flat();
+            
+            console.log(`Background fetch completed. Total chapters: ${existingChapters.length+newChapters.length}`);
+        } catch (error) {
+            console.error('Error during background fetch:', error);
+        }
     }
 
     private async fetchPageEpisodeList(pageNumber: number) : Promise<Chapter[]> {
@@ -65,11 +134,10 @@ export class IVooxChannel extends Channel {
         const $ = cheerio.load('');
 
         const currentPageUrl = this.channelUrl?.replace('_1.html', `_${pageNumber}.html`);
-        console.log(`++Fetching page ${pageNumber} from ${currentPageUrl}`);
+        console.log(`  +Fetching page ${pageNumber} from ${currentPageUrl}`);
 
         const channelResponsePage = await IVooxChannel.limit(async () => await got(currentPageUrl || ''));
         const $channelPage = cheerio.load(channelResponsePage.body || '');
-        
 
         const selector = `.pl-1 > .d-flex > .d-flex > .w-100 > a`;
 
@@ -84,13 +152,13 @@ export class IVooxChannel extends Channel {
     private async fetchChapterData(title: string, url: string): Promise<Chapter> {
         const cacheKey = `chapter_${url}`;
         
-        const cachedChapter = IVooxChannel.chapterCache.get<Chapter>(cacheKey);
+        const cachedChapter =   IVooxChannel.chapterCache.get<Chapter>(cacheKey);
         if (cachedChapter) {
             return cachedChapter;
         }
         
         const programResponsePage = await IVooxChannel.limit(async () => await got(url));
-        console.debug(`Retrieved info for podcast "${this.channelName}" chapter "${title}", url=(${url}).`);
+        console.debug(`    ++Podcast "${this.channelName}" chapter "${title}", url=(${url}).`);
 
         const $chapterPage = cheerio.load(programResponsePage.body);
 
@@ -148,14 +216,18 @@ export class IVooxChannel extends Channel {
 
     private static limit = pRateLimit({
         interval: 1000,             // 1000 ms == 1 second
-        rate: IVooxChannel.MAX_CALLS_PER_SECOND,                   // 60 API calls per interval
-        concurrency: IVooxChannel.MAX_CALLS_PER_SECOND*1.2,            // no more than 80 running at once
+        rate: IVooxChannel.IVOOX_MAX_CALLS_PER_SECOND,                   // 60 API calls per interval
+        concurrency: IVooxChannel.IVOOX_MAX_CALLS_PER_SECOND*1.2,            // no more than 80 running at once
         maxDelay: 5 * 60000              // an API call delayed > 2 sec is rejected
     });
 
+    private static pageCache: NodeCache = new NodeCache({ 
+        stdTTL: 60*30, // Tiempo de vida en segundos
+        checkperiod: 60*30 // Verificar expiración cada 60 minutos
+    });
+
     private static chapterCache: NodeCache = new NodeCache({ 
-        stdTTL: 3600*24, // Tiempo de vida en segundos
-        checkperiod: 600 // Verificar expiración cada 60 minutos
+        stdTTL: 0, // Tiempo de vida en segundos
     });
 }
 //# sourceMappingURL=IVooxChannel.js.map

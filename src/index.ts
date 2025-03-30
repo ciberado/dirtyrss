@@ -93,3 +93,4 @@ app.get('/ivoox/:showId', async (req, reply) => {
 app.listen(FASTIFY_PORT, '0.0.0.0', function (err, address) {
     console.log(`Server started at port ${FASTIFY_PORT}.`);
 });
+//# sourceMappingURL=index.js.map
