@@ -59,6 +59,12 @@ export class IVooxChannel extends Channel {
 
     protected async fetchEpisodeList(): Promise<Chapter[]> {
         console.log(`Chapters: ${this.numChapters}`);
+        console.log(`
+            Config: ${IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE} pages per batch\n
+            Config: ${IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND} requests per second\n
+            Config: ${IVooxChannel.IVOOX_FETCH_TIMEOUT_MS} ms timeout`
+        );
+
         const pageNumbers = Array.from({ length: this.numChapters }, (_, i) => i + 1);
         
         let collectedChapters: Chapter[] = [];
