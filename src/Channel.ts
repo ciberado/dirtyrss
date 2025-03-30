@@ -61,3 +61,4 @@ export abstract class Channel {
         return feed.buildXml();
     }
 }
+//# sourceMappingURL=Channel.js.map

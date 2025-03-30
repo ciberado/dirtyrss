@@ -46,8 +46,8 @@ export class TwitchChannel extends Channel{
         const $ = cheerio.load(programResponsePage.body);
 
         this.author = this.channelName;
-        this.description = $('.about-section *').first().text().trim();
-        this.imageUrl = $('.tw-avatar img.tw-image-avatar').attr('src')?.trim();
+        this.description = $('meta[property="og:description"]').attr('content')?.trim();
+        this.imageUrl = $('meta[property="og:image"]').attr('content')?.trim();
         this.ttlInMinutes = 60;
         this.siteUrl = programUrl;        
     }

@@ -45,3 +45,4 @@ export class Chapter {
         return this._duration;
     }
 }
+//# sourceMappingURL=Chapter.js.map
