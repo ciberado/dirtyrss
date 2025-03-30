@@ -7,9 +7,9 @@ import NodeCache from 'node-cache';
 
 export class IVooxChannel extends Channel {
 
-    private static readonly IVOOX_FETCH_TIMEOUT_MS = 10000;
-    private static readonly IVOOX_FETCH_PAGES_BATCH_SIZE = 15;
-    private static readonly IVOOX_MAX_CALLS_PER_SECOND = 95;
+    private static readonly IVOOX_FETCH_TIMEOUT_MS = process.env.IVOOX_FETCH_TIMEOUT_MS || 10000;
+    private static readonly IVOOX_FETCH_PAGES_BATCH_SIZE = process.env.IVOOX_FETCH_PAGES_BATCH_SIZE || 15;
+    private static readonly IVOOX_MAX_REQUESTS_PER_SECOND = process.env.IVOOX_MAX_CALLS_PER_SECOND || 95;
 
     private channelUrl? : string;
     private channelPageHtml?: string;
@@ -64,7 +64,6 @@ export class IVooxChannel extends Channel {
         let collectedChapters: Chapter[] = [];
         let timeoutReached = false;
     
-        // Crear un Promise que se resuelva después del timeout
         const timeoutPromise = new Promise<Chapter[]>((_, reject) => {
             setTimeout(() => {
                 timeoutReached = true;
@@ -73,7 +72,7 @@ export class IVooxChannel extends Channel {
         });
     
         try {
-            // Dividir las páginas en lotes de 10
+            // Dividir las páginas en lotes
             for (let i = 0; i < pageNumbers.length && !timeoutReached; i += IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE) {
                 const batch = pageNumbers.slice(i, i + IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE);
                 
@@ -87,7 +86,7 @@ export class IVooxChannel extends Channel {
                     collectedChapters.push(...batchResults.flat());
                 } catch (error) {
                     if (timeoutReached && collectedChapters.length < this.numChapters) {
-                        // Iniciar carga en background para las páginas restantes
+                        //Iniciar carga en background para las páginas restantes, solo llenamos la cache
                         const remainingPages = pageNumbers.slice(i + batch.length);
                         if (remainingPages.length > 0) {
                             this.continueLoadingInBackground(remainingPages, collectedChapters);
@@ -216,8 +215,8 @@ export class IVooxChannel extends Channel {
 
     private static limit = pRateLimit({
         interval: 1000,             // 1000 ms == 1 second
-        rate: IVooxChannel.IVOOX_MAX_CALLS_PER_SECOND,                   // 60 API calls per interval
-        concurrency: IVooxChannel.IVOOX_MAX_CALLS_PER_SECOND*1.2,            // no more than 80 running at once
+        rate: IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND,                   // 60 API calls per interval
+        concurrency: IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND*1.2,            // no more than 80 running at once
         maxDelay: 5 * 60000              // an API call delayed > 2 sec is rejected
     });
 
