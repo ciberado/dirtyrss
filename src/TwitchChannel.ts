@@ -33,10 +33,12 @@ export class TwitchChannel extends Channel{
     static downloadingEpisodes : { [key: string]: boolean; } = {};
     
     chapterUrlPrefix: string;
+    username: string;
 
     constructor(channelName: string, chapterUrlPrefix : string) {
         super(channelName);
         this.chapterUrlPrefix = chapterUrlPrefix;
+        this.username = channelName;
     }
 
     protected async fetchChannelInformation(): Promise<void> {
@@ -45,8 +47,9 @@ export class TwitchChannel extends Channel{
         const programResponsePage = await got(programUrl);
         const $ = cheerio.load(programResponsePage.body);
 
-        this.channelName = $('meta[name="title"]').attr('content')?.trim() ?? this.channelName;
-        this.author = this.channelName;
+        this.username = this.channelName.toString();
+        this.author = this.channelName.toString();
+        this.channelName = $('meta[name="title"]').attr('content')?.trim() || this.channelName;
         this.description = $('meta[property="og:description"]').attr('content')?.trim();
         this.imageUrl = $('meta[property="og:image"]').attr('content')?.trim();
         this.ttlInMinutes = 60;
@@ -62,7 +65,7 @@ export class TwitchChannel extends Channel{
                 pythonPath: '/usr/bin/python3',
                 pythonOptions: [], 
                 scriptPath: path.dirname(TwitchChannel.twitchDlPath),
-                args: ['videos', this.channelName, '--json']
+                args: ['videos', this.username, '--json']
               };
 
             PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, (err, results : unknown) => {
