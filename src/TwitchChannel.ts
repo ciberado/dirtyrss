@@ -45,11 +45,13 @@ export class TwitchChannel extends Channel{
         const programResponsePage = await got(programUrl);
         const $ = cheerio.load(programResponsePage.body);
 
+        this.channelName = $('meta[name="title"]').attr('content')?.trim() ?? this.channelName;
         this.author = this.channelName;
         this.description = $('meta[property="og:description"]').attr('content')?.trim();
         this.imageUrl = $('meta[property="og:image"]').attr('content')?.trim();
         this.ttlInMinutes = 60;
-        this.siteUrl = programUrl;        
+        this.siteUrl = programUrl;
+        this.link = programUrl;  
     }
 
     protected async fetchEpisodeList() : Promise<Chapter[]> {
