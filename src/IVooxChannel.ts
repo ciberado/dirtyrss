@@ -4,12 +4,14 @@ import { default as got } from 'got';
 import { Chapter } from './Chapter.js';
 import { Channel } from './Channel.js';
 import NodeCache from 'node-cache';
+import { performance } from 'perf_hooks';
 
 export class IVooxChannel extends Channel {
 
     private static readonly IVOOX_FETCH_TIMEOUT_MS = parseInt(process.env.IVOOX_FETCH_TIMEOUT_MS ?? "10000");
     private static readonly IVOOX_FETCH_PAGES_BATCH_SIZE = parseInt(process.env.IVOOX_FETCH_PAGES_BATCH_SIZE ?? "5");
     private static readonly IVOOX_MAX_REQUESTS_PER_SECOND = parseInt(process.env.IVOOX_MAX_CALLS_PER_SECOND ?? "90");
+    private static readonly IVOOX_CHAPTERS_PER_PAGE = parseInt(process.env.IVOOX_CHAPTERS_PER_PAGE ?? "20");
 
     private channelUrl? : string;
     private channelPageHtml?: string;
@@ -58,14 +60,16 @@ export class IVooxChannel extends Channel {
     // }
 
     protected async fetchEpisodeList(): Promise<Chapter[]> {
+        performance.mark(`fetchEpisodeList_${this.channelName.replace(' ','_')}_start`);
         console.log(`Chapters: ${this.numChapters}`);
+
         console.log(`
-            Config: ${IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE} pages per batch\n
-            Config: ${IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND} requests per second\n
+            Config: ${IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE} pages per batch
+            Config: ${IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND} requests per second
             Config: ${IVooxChannel.IVOOX_FETCH_TIMEOUT_MS} ms timeout`
         );
 
-        const pageNumbers = Array.from({ length: this.numChapters }, (_, i) => i + 1);
+        const pageNumbers = Array.from({ length: (this.numChapters/IVooxChannel.IVOOX_CHAPTERS_PER_PAGE)+1 }, (_, i) => i + 1);
         
         let collectedChapters: Chapter[] = [];
         let timeoutReached = false;
@@ -109,10 +113,19 @@ export class IVooxChannel extends Channel {
         }
     
         collectedChapters.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+        performance.mark(`fetchEpisodeList_${this.channelName.replace(' ','_')}_end`);
+        console.log(performance.measure(
+            `fetchEpisodeList_${this.channelName.replace(' ','_')}`,
+            `fetchEpisodeList_${this.channelName.replace(' ','_')}_start`, 
+            `fetchEpisodeList_${this.channelName.replace(' ','_')}_end`)
+        );
+
         return collectedChapters;
     }
     
     private async continueLoadingInBackground(remainingPages: number[], existingChapters: Chapter[]): Promise<void> {
+        performance.mark(`Background_${this.channelName.replace(' ','_')}_start`);
         console.log(`Continuing chapter fetch in background for ${remainingPages.length} remaining pages`);
         
         try {
@@ -128,7 +141,15 @@ export class IVooxChannel extends Channel {
             const newChapters = (await Promise.all(backgroundPromises))
                 .flat();
             
-            console.log(`Background fetch completed. Total chapters: ${existingChapters.length+newChapters.length}`);
+            performance.mark(`Background_${this.channelName.replace(' ','_')}_end`);
+            console.log(`Background fetch completed. Total chapters: ${existingChapters.length+newChapters.length}, Background chapters: ${backgroundPromises.length}`);
+            console.log(performance.measure(
+                `Background_${this.channelName.replace(' ','_')}`,
+                `Background_${this.channelName.replace(' ','_')}_start`, 
+                `Background_${this.channelName.replace(' ','_')}_end`)
+            );
+            
+            
         } catch (error) {
             console.error('Error during background fetch:', error);
         }
