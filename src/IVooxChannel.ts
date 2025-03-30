@@ -9,7 +9,7 @@ export class IVooxChannel extends Channel {
 
     private static readonly IVOOX_FETCH_TIMEOUT_MS = parseInt(process.env.IVOOX_FETCH_TIMEOUT_MS ?? "10000");
     private static readonly IVOOX_FETCH_PAGES_BATCH_SIZE = parseInt(process.env.IVOOX_FETCH_PAGES_BATCH_SIZE ?? "5");
-    private static readonly IVOOX_MAX_REQUESTS_PER_SECOND = parseInt(process.env.IVOOX_MAX_CALLS_PER_SECOND ?? "95");
+    private static readonly IVOOX_MAX_REQUESTS_PER_SECOND = parseInt(process.env.IVOOX_MAX_CALLS_PER_SECOND ?? "90");
 
     private channelUrl? : string;
     private channelPageHtml?: string;
