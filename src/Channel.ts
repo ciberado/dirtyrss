@@ -1,5 +1,6 @@
 import { Podcast } from 'podcast';
 import { Chapter } from './Chapter.js';
+import { performance } from 'perf_hooks';
 
 export abstract class Channel {
     
@@ -10,6 +11,7 @@ export abstract class Channel {
     protected imageUrl?: string;
     protected author?: string;
     protected ttlInMinutes?: number;
+    protected link?: string;
 
     constructor(channelName : string) {
         this.channelName = channelName;
@@ -26,15 +28,19 @@ export abstract class Channel {
         await this.fetchChannelInformation();
 
         console.debug(`Retrieving list of chapters.`);
+        const startTime = performance.now();
         const chapters = await this.fetchEpisodeList();
-        console.info(`${chapters.length} chapters found for channel ${this.channelName}.`);
+        const endTime = performance.now();
+        console.info(`${chapters.length} chapters found for channel ${this.channelName} in ${endTime - startTime} ms.`);
 
         const feed = new Podcast({
             title: this.channelName,
             author: this.author,
             description: this.description,
             imageUrl: this.imageUrl,
-            ttl: this.ttlInMinutes
+            ttl: this.ttlInMinutes,
+            siteUrl: this.link,
+            generator: 'dirtyrss'
         });
 
         chapters.forEach(c => {
@@ -42,7 +48,9 @@ export abstract class Channel {
                 title: c.title,
                 date: c.date.toUTCString(),
                 description: c.description,
+                imageUrl: c.image,
                 itunesImage : c.image,
+                itunesDuration : c.duration,
                 enclosure: {
                     url: c.fileUrl,
                     type: 'audio/mpeg'
@@ -53,3 +61,4 @@ export abstract class Channel {
         return feed.buildXml();
     }
 }
+//# sourceMappingURL=Channel.js.map

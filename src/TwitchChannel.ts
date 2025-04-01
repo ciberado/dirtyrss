@@ -33,10 +33,12 @@ export class TwitchChannel extends Channel{
     static downloadingEpisodes : { [key: string]: boolean; } = {};
     
     chapterUrlPrefix: string;
+    username: string;
 
     constructor(channelName: string, chapterUrlPrefix : string) {
         super(channelName);
         this.chapterUrlPrefix = chapterUrlPrefix;
+        this.username = channelName;
     }
 
     protected async fetchChannelInformation(): Promise<void> {
@@ -45,11 +47,14 @@ export class TwitchChannel extends Channel{
         const programResponsePage = await got(programUrl);
         const $ = cheerio.load(programResponsePage.body);
 
-        this.author = this.channelName;
-        this.description = $('.about-section *').first().text().trim();
-        this.imageUrl = $('.channel-info-content img.tw-image-avatar').attr('src')?.trim();
+        this.username = this.channelName.toString();
+        this.author = this.channelName.toString();
+        this.channelName = $('meta[name="title"]').attr('content')?.trim() || this.channelName;
+        this.description = $('meta[property="og:description"]').attr('content')?.trim();
+        this.imageUrl = $('meta[property="og:image"]').attr('content')?.trim();
         this.ttlInMinutes = 60;
-        this.siteUrl = programUrl;        
+        this.siteUrl = programUrl;
+        this.link = programUrl;  
     }
 
     protected async fetchEpisodeList() : Promise<Chapter[]> {
@@ -60,7 +65,7 @@ export class TwitchChannel extends Channel{
                 pythonPath: '/usr/bin/python3',
                 pythonOptions: [], 
                 scriptPath: path.dirname(TwitchChannel.twitchDlPath),
-                args: ['videos', this.channelName, '--json']
+                args: ['videos', this.username, '--json']
               };
 
             PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, (err, results : unknown) => {
@@ -69,7 +74,7 @@ export class TwitchChannel extends Channel{
                 const twitchChapters = results as TwitchChannelData[];
                 const chapters = !twitchChapters ? [] :
                     twitchChapters[0].videos.map(tc => new Chapter(
-                    tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.channelName}/${tc.id}`, tc.title, new Date(tc.publishedAt), ''
+                    tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.channelName}/${tc.id}`, tc.title, new Date(tc.publishedAt), '', ''
                 ));
                 resolve(chapters);
             });
@@ -153,4 +158,4 @@ try {
     console.error(err);
     process.exit(1);
 }
-
+//# sourceMappingURL=TwitchChannel.js.map
