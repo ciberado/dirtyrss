@@ -71,7 +71,7 @@ quieres escuchar como parámetro `podcast`. Por ejemplo:
 ```bash
 http://<IP DE TU SERVIDOR>/ivoox/todopoderosos
 http://<IP DE TU SERVIDOR>/twitch/srevolution
-http://<IP DE TU SERVIDOR>/twitch/lavanguardia/enric-juliana
+http://<IP DE TU SERVIDOR>/lavanguardia/enric-juliana
 ```
 
 Obtendrás el feed RSS correspondiente. Ahora solo tienes que compartirlo con tu podcatcher o lector de RSS.
