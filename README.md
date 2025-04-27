@@ -30,7 +30,7 @@ sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3000
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
 export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
-nvm install 16.1
+nvm install --lts
 ```
 
 * Instala otros prerequisitos:
@@ -71,11 +71,12 @@ quieres escuchar como parámetro `podcast`. Por ejemplo:
 ```bash
 http://<IP DE TU SERVIDOR>/ivoox/todopoderosos
 http://<IP DE TU SERVIDOR>/twitch/srevolution
+http://<IP DE TU SERVIDOR>/twitch/lavanguardia/enric-juliana
 ```
 
-Obtendrás el feed RSS correspondiente. Ahora solo tienes que compartirlo con tu podcatcher.
+Obtendrás el feed RSS correspondiente. Ahora solo tienes que compartirlo con tu podcatcher o lector de RSS.
 
-**OJO: los enlaces a los audios caducan cada pocas horas**. Así que si no descargas los programas a local,
+**OJO: alguno de los enlaces a los audios caducan cada pocas horas**. Así que si no descargas los programas a local,
 actualiza tu feed antes de darle al play.
 
 ## Colaborando en DirtyRSS
@@ -89,5 +90,7 @@ las vacaciones de navidades. A mi me sirve, pero hay optimizaciones obvias que e
 - [ ] Documentar mejor el código antes de que crezca
 - [ ] Montar una batería de tests
 - [x] Generar podcasts a partir de otras fuentes, como Twitch
+- [x] Generar feeds RSS con artículos de La Vanguardia
+- [ ] Generar feeds RSS con otros diarios
 
 Si te animas, coméntamelo y te cuento cómo hackear el código. Ya sabes dónde encontrarme: http://twitter.com/ciberado.
