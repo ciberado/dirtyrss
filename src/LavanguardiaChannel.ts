@@ -1,4 +1,4 @@
-import * as cheerio from 'cheerio';
+import * as cheerio from "cheerio"; 
 import { default as got } from 'got';
 import { Chapter } from './Chapter.js';
 import { Channel } from './Channel.js';
@@ -17,9 +17,8 @@ export class LavanguardiaChannel extends Channel {
     protected async fetchChannelInformation(): Promise<void> {
         console.info(`Configuring feed from ${this.channelUrl}`);
         const channelResponsePage = await got(this.channelUrl);
-        const $ = cheerio.default;
         const channelPageHtml = channelResponsePage.body;
-        const $channelPage = $.load(channelPageHtml);
+        const $channelPage = cheerio.load(channelPageHtml);
         
         this.channelName = $channelPage('.author-opinion-name').text().trim();
         this.author = $channelPage('.author-opinion-name').text().trim();
@@ -52,9 +51,7 @@ export class LavanguardiaChannel extends Channel {
         const chapters: Chapter[] = [];
         const channelResponsePage = await got(this.channelUrl);
         const $ = cheerio.load(channelResponsePage.body);
-        const channelPageHtml = channelResponsePage.body;
-        const $channelPage = $.load(channelPageHtml);
-        const $articles = $channelPage('article');
+        const $articles = $('article');
         for (let index = 0; index < $articles.length; index++) {
             const $article = $($articles[index]);
             const fileUrl = 'https://www.lavanguardia.com' + $article.find('a.page-link').attr('href')!.trim();

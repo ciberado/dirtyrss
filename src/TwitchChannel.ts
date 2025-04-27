@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-import { default as cheerio } from 'cheerio';
+import * as cheerio from "cheerio"; 
 import { default as got } from 'got';
 import commandExists from 'command-exists';
 import { downloadRelease } from '@terascope/fetch-github-release';

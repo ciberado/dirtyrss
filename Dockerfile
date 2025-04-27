@@ -8,9 +8,8 @@ COPY . .
 RUN apk update; \
     apk add ffmpeg nodejs npm python3
 
-RUN \
-  npm i; \
-  npx tsc 
+RUN npm i
+RUN npx tsc 
 
 EXPOSE 3000
 
