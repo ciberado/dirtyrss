@@ -84,7 +84,7 @@ Pull request are welcome! Esta es obviamente una implementación rápida y sucia
 las vacaciones de navidades. A mi me sirve, pero hay optimizaciones obvias que estarían chulas. Por ejemplo:
 
 - [ ] Hacer el código compatible con Lambda
-- [ ] Añadir una caché para los shows habituales
+- [x] Añadir una caché para los shows habituales (implementado por Fran Lerma)
 - [x] ~Revisar por qué algunos programas parece que no se descargan correctamente~
 - [ ] Documentar mejor el código antes de que crezca
 - [ ] Montar una batería de tests
