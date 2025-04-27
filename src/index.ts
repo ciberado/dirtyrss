@@ -6,8 +6,8 @@ import fse from 'fs-extra';
 import { fastify, FastifyReply } from 'fastify';
 import { default as fastifyStatic } from 'fastify-static';
 import { IVooxChannel } from './IVooxChannel.js';
-
 import { TwitchChannel } from './TwitchChannel.js';
+import { LavanguardiaChannel } from './LavanguardiaChannel.js';
 
 const FASTIFY_PORT = process.env.PORT || 3000;
 
@@ -26,7 +26,27 @@ app.register(fastifyStatic, {
     acceptRanges : true
 });
 
-interface HttpRequest {
+interface LavanguardiaHttpRequest {
+    params : {
+        author : string;
+    }
+}
+
+
+app.get('/lavanguardia/:author', async (req, reply) => {
+    const request = req as LavanguardiaHttpRequest;
+    try {
+        const lvc = new LavanguardiaChannel(request.params.author);
+        const xmlFeed = await lvc.generateFeed();
+        reply.send(xmlFeed);            
+    } catch (err) {
+        console.warn(err);
+        reply.code(404).type('text/html').send(`Podcast ${request.params.author} not found (${err}).`);
+    }
+});
+
+
+interface TwitchHttpRequest {
     params : {
         showId : string;
         episodeId: string;
@@ -37,7 +57,7 @@ interface HttpRequest {
 }
 
 app.get('/twitch/:showId', async (req, reply) => {
-    const request = req as HttpRequest;
+    const request = req as TwitchHttpRequest;
     try {
         const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}`;
         const tc = new TwitchChannel(request.params.showId, chapterUrlPrefix);
@@ -50,7 +70,7 @@ app.get('/twitch/:showId', async (req, reply) => {
 });
 
 app.get('/twitch/:showId/:episodeId', async (req, reply) => {
-    const request = req as HttpRequest;
+    const request = req as TwitchHttpRequest;
 
     try {
         const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}`;
@@ -65,7 +85,7 @@ app.get('/twitch/:showId/:episodeId', async (req, reply) => {
 });
 
 
-async function processIVooxRequest(request : HttpRequest, reply : FastifyReply) {
+async function processIVooxRequest(request : TwitchHttpRequest, reply : FastifyReply) {
     try {    
         const channelName = request.query.podcast || request.params.showId;
         const ic = new IVooxChannel(channelName);
@@ -82,12 +102,12 @@ async function processIVooxRequest(request : HttpRequest, reply : FastifyReply) 
 }
 
 app.get('/', async (req, reply) => {
-    await processIVooxRequest( req as HttpRequest, reply);
+    await processIVooxRequest( req as TwitchHttpRequest, reply);
 });
 
 
 app.get('/ivoox/:showId', async (req, reply) => {
-    await processIVooxRequest( req as HttpRequest, reply);
+    await processIVooxRequest( req as TwitchHttpRequest, reply);
 });
 
 app.listen(FASTIFY_PORT, '0.0.0.0', function (err, address) {
