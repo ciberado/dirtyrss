@@ -156,6 +156,6 @@ try {
     console.info(`TwitchDL downloaded at ${TwitchChannel.twitchDlPath}.`);
 } catch (err) {
     console.error(err);
-    process.exit(1);
+    //process.exit(1);
 }
 //# sourceMappingURL=TwitchChannel.js.map
