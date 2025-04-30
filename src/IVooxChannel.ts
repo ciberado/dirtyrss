@@ -40,34 +40,27 @@ export class IVooxChannel extends Channel {
         this.channelName = $channelPage('h1').text().trim();
         this.author = $channelPage('.d-flex > .text-medium > . a').text().trim();
         this.description = $channelPage('.d-flex > .d-none > .text-truncate-3').text().trim();
-        this.imageUrl = $channelPage('.d-flex > .image-wrapper.pr-2 > img').attr('data-lazy-src')?.trim();
+        this.imageUrl = $channelPage('.d-flex > .image-wrapper.pr-2 > img').attr('src')?.trim();
+        if(this.imageUrl && this.imageUrl.length == 0) {
+            this.imageUrl = $channelPage('.d-flex > .image-wrapper.pr-2 > img').attr('data-lazy-src')?.trim();
+        }
+
+        console.debug(`Channel image url: ${this.imageUrl}`);
+
         this.ttlInMinutes = 60;
         this.siteUrl = this.channelUrl;
         this.numChapters = parseInt($channelPage('.stat > .text-gray:first').text().replace('.','').trim());
         this.link = this.channelUrl;
     }
 
-    // protected async fetchEpisodeList(): Promise<Chapter[]> {
-    //     console.log(`Chapters: ${this.numChapters}`);
-    //     const maxPageNumber = Math.min(this.numChapters? await this.calculateMaxPageNumber() : 1, 999);
-    //     const pageNumbers = Array.from({ length: maxPageNumber }, (_, i) => i + 1);
-    
-    //     const allChapters = await Promise.all(
-    //         pageNumbers.map(page => this.fetchPageEpisodeList(page))
-    //     );
-    
-    //     return allChapters.flat();
-    // }
-
     protected async fetchEpisodeList(): Promise<Chapter[]> {
         performance.mark(`fetchEpisodeList_${this.channelName.replace(' ','_')}_start`);
         console.log(`Chapters: ${this.numChapters}`);
 
-        console.log(`
-        Config: ${IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE} pages per batch
-        Config: ${IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND} requests per second
-        Config: ${IVooxChannel.IVOOX_FETCH_TIMEOUT_MS} ms timeout`
-        );
+        // console.log(`Config: ${IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE} pages per batch
+        // Config: ${IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND} requests per second
+        // Config: ${IVooxChannel.IVOOX_FETCH_TIMEOUT_MS} ms timeout`
+        // );
 
         const pageNumbers = Array.from({ length: (this.numChapters/IVooxChannel.IVOOX_CHAPTERS_PER_PAGE)+1 }, (_, i) => i + 1);
         

@@ -9,6 +9,8 @@ import { IVooxChannel } from './IVooxChannel.js';
 
 import { TwitchChannel } from './TwitchChannel.js';
 
+const LOG_LEVEL = process.env.LOG_LEVEL ?? 'info';
+
 const FASTIFY_PORT = process.env.PORT || 3000;
 
 const FASTIFY_STATIC = '/tmp/public';
