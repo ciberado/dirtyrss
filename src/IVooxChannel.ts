@@ -1,4 +1,4 @@
-import * as cheerio from 'cheerio';
+import * as cheerio from "cheerio"; 
 import { pRateLimit } from 'p-ratelimit';
 import { default as got } from 'got';
 import { Chapter } from './Chapter.js';
@@ -33,9 +33,8 @@ export class IVooxChannel extends Channel {
     protected async fetchChannelInformation(): Promise<void> {
         console.info(`Configuring feed from ${this.channelUrl}`);
         const channelResponsePage = await got(this.channelUrl || '');
-        const $ = cheerio.default;
         this.channelPageHtml = channelResponsePage.body;
-        const $channelPage = $.load(this.channelPageHtml);
+        const $channelPage = cheerio.load(this.channelPageHtml);
 
         this.channelName = $channelPage('h1').text().trim();
         this.author = $channelPage('.d-flex > .text-medium > . a').text().trim();

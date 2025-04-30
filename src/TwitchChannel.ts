@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-import { default as cheerio } from 'cheerio';
+import * as cheerio from "cheerio"; 
 import { default as got } from 'got';
 import commandExists from 'command-exists';
 import { downloadRelease } from '@terascope/fetch-github-release';
@@ -156,6 +156,6 @@ try {
     console.info(`TwitchDL downloaded at ${TwitchChannel.twitchDlPath}.`);
 } catch (err) {
     console.error(err);
-    process.exit(1);
+    //process.exit(1);
 }
 //# sourceMappingURL=TwitchChannel.js.map
