@@ -155,7 +155,8 @@ export class IVooxChannel extends Channel {
         const channelResponsePage = await IVooxChannel.limit(async () => await got(currentPageUrl || ''));
         const $channelPage = cheerio.load(channelResponsePage.body || '');
 
-        const selector = `.pl-1 > .d-flex > .d-flex > .w-100 > a`;
+        //const selector = `.pl-1 > .d-flex > .d-flex > .w-100 > a`;
+        const selector = `.d-flex > .d-flex > h3 > a`
 
         const chapters = await Promise.all(
               [...$channelPage(selector)]
