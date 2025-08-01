@@ -37,11 +37,11 @@ export class IVooxChannel extends Channel {
         const $channelPage = cheerio.load(this.channelPageHtml);
 
         this.channelName = $channelPage('h1').text().trim();
-        this.author = $channelPage('.d-flex > .text-medium > . a').text().trim();
+        this.author = $channelPage('a.text-black.font-weight-normal').text().trim();
         this.description = $channelPage('.d-flex > .d-none > .text-truncate-3').text().trim();
-        this.imageUrl = $channelPage('.d-flex > .image-wrapper.pr-2 > img').attr('src')?.trim();
-        if (this.imageUrl && this.imageUrl.length == 0) {
-            this.imageUrl = $channelPage('.d-flex > .image-wrapper.pr-2 > img').attr('data-lazy-src')?.trim();
+        this.imageUrl = $channelPage('.image-wrapper img').attr('src')?.trim();
+        if (!this.imageUrl || this.imageUrl.length === 0) {
+            this.imageUrl = $channelPage('.image-wrapper.pr-2 img').attr('data-lazy-src')?.trim();
         }
         this.ttlInMinutes = 60;
         this.siteUrl = this.channelUrl;
