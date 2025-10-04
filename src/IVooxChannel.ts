@@ -8,6 +8,8 @@ import { performance } from 'perf_hooks';
 
 export class IVooxChannel extends Channel {
 
+    private static readonly DATE_AND_DURATION_SELECTOR = 'span.ml-sm-1';
+
     private static readonly IVOOX_FETCH_TIMEOUT_MS = parseInt(process.env.IVOOX_FETCH_TIMEOUT_MS ?? "10000");
     private static readonly IVOOX_FETCH_PAGES_BATCH_SIZE = parseInt(process.env.IVOOX_FETCH_PAGES_BATCH_SIZE ?? "5");
     private static readonly IVOOX_MAX_REQUESTS_PER_SECOND = parseInt(process.env.IVOOX_MAX_CALLS_PER_SECOND ?? "90");
@@ -187,10 +189,16 @@ export class IVooxChannel extends Channel {
 
         const description = $chapterPage('div.mb-3 > div > p.text-truncate-5').text().trim();
 
-        const date = this.fromSpanishDate($chapterPage('span.text-medium.ml-sm-1').text().split('·')[0].trim() || '01/01/2000');
+        let date = this.fromSpanishDate('01/01/2000');
+        try {
+            date = this.fromSpanishDate($chapterPage(IVooxChannel.DATE_AND_DURATION_SELECTOR).text().split('·')[0].trim() || '01/01/2000');
+        } catch (error) {  
+            console.error(`Error fetching date for chapter ${title}:`, error);
+        }
+        
         let duration = '00:00';
         try {
-          duration = $chapterPage('span.ml-sm-1').text().split('·')[1].trim() || '00:00';
+          duration = $chapterPage(IVooxChannel.DATE_AND_DURATION_SELECTOR).text().split('·')[1].trim() || '00:00';
         } catch (error) {
             console.error(`Error fetching duration for chapter ${title}:`, error);
         }
