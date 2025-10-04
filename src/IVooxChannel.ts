@@ -188,7 +188,12 @@ export class IVooxChannel extends Channel {
         const description = $chapterPage('div.mb-3 > div > p.text-truncate-5').text().trim();
 
         const date = this.fromSpanishDate($chapterPage('span.text-medium.ml-sm-1').text().split('·')[0].trim() || '01/01/2000');
-        const duration = $chapterPage('span.text-medium.ml-sm-1').text().split('·')[1].trim() || '00:00';
+        let duration = '00:00';
+        try {
+          duration = $chapterPage('span.ml-sm-1').text().split('·')[1].trim() || '00:00';
+        } catch (error) {
+            console.error(`Error fetching duration for chapter ${title}:`, error);
+        }
 
         let img = ($chapterPage('.d-flex > .image-wrapper.pr-2 > img').attr('data-lazy-src') || '').trim();
         if (img.includes('url=')) {
