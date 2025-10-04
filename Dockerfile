@@ -1,16 +1,29 @@
-FROM node:alpine
+FROM node:20-alpine AS builder
 
-RUN mkdir -p /home/node/app/node_modules && chown -R node:node /home/node/app
-WORKDIR /home/node/app
+WORKDIR /app
 
-COPY . .
+RUN apk add --no-cache ffmpeg python3
 
-RUN apk update; \
-    apk add ffmpeg nodejs npm python3
+COPY package*.json tsconfig.json ./
 
 RUN npm i
-RUN npx tsc 
+COPY . .
+
+RUN npx tsc
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache ffmpeg
+
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/assets ./assets
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+
+USER node
 
 EXPOSE 3000
 
-CMD [ "npm", "run", "start" ]
+CMD ["npm", "run", "start"]
