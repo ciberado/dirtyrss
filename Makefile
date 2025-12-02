@@ -15,7 +15,7 @@ docker-log:
 	docker logs -f dirtyrss
 
 docker-run:
-	docker start dirtyrss -d
+	docker start dirtyrss 
 
 docker-clean:clean
 	docker container ls -al | grep dirtyrss && docker stop dirtyrss || true
