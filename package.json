@@ -1,6 +1,6 @@
 {
   "name": "dirtyrss",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Transforms some webpages in podcast feeds",
   "main": "dist/index.js",
   "type": "module",
