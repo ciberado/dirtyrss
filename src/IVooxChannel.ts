@@ -15,6 +15,12 @@ export class IVooxChannel extends Channel {
     private static readonly IVOOX_MAX_REQUESTS_PER_SECOND = parseInt(process.env.IVOOX_MAX_CALLS_PER_SECOND ?? "90");
     private static readonly IVOOX_CHAPTERS_PER_PAGE = parseInt(process.env.IVOOX_CHAPTERS_PER_PAGE ?? "20");
 
+    private static readonly IVOOX_REQUEST_OPTIONS = {
+        headers: {
+            'User-Agent': "Wget/version (linux-gnu)"
+        }
+    }
+
     private channelUrl? : string;
     private channelPageHtml?: string;
     private numChapters:number = 0;
@@ -34,7 +40,7 @@ export class IVooxChannel extends Channel {
 
     protected async fetchChannelInformation(): Promise<void> {
         console.info(`Configuring feed from ${this.channelUrl}`);
-        const channelResponsePage = await got(this.channelUrl || '');
+        const channelResponsePage = await this.requestIvoox(this.channelUrl || '');
         this.channelPageHtml = channelResponsePage.body;
         const $channelPage = cheerio.load(this.channelPageHtml);
 
@@ -54,12 +60,6 @@ export class IVooxChannel extends Channel {
     protected async fetchEpisodeList(): Promise<Chapter[]> {
         performance.mark(`fetchEpisodeList_${this.channelName.replace(' ','_')}_start`);
         console.log(`Chapters: ${this.numChapters}`);
-
-        // console.log(`
-        // Config: ${IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE} pages per batch
-        // Config: ${IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND} requests per second
-        // Config: ${IVooxChannel.IVOOX_FETCH_TIMEOUT_MS} ms timeout`
-        // );
 
         const pageNumbers = Array.from({ length: (this.numChapters/IVooxChannel.IVOOX_CHAPTERS_PER_PAGE)+1 }, (_, i) => i + 1);
         
@@ -154,7 +154,7 @@ export class IVooxChannel extends Channel {
         const currentPageUrl = this.channelUrl?.replace('_1.html', `_${pageNumber}.html`);
         console.log(`  +Fetching page ${pageNumber} from ${currentPageUrl}`);
 
-        const channelResponsePage = await IVooxChannel.limit(async () => await got(currentPageUrl || ''));
+        const channelResponsePage = await IVooxChannel.limit(async () => await this.requestIvoox(currentPageUrl || ''));
         const $channelPage = cheerio.load(channelResponsePage.body || '');
 
         //const selector = `.pl-1 > .d-flex > .d-flex > .w-100 > a`;
@@ -176,7 +176,7 @@ export class IVooxChannel extends Channel {
             return cachedChapter;
         }
         
-        const programResponsePage = await IVooxChannel.limit(async () => await got(url));
+        const programResponsePage = await IVooxChannel.limit(async () => await this.requestIvoox(url));
         console.debug(`    ++Podcast "${this.channelName}" chapter "${title}", url=(${url}).`);
 
         const $chapterPage = cheerio.load(programResponsePage.body);
@@ -220,7 +220,7 @@ export class IVooxChannel extends Channel {
         console.info(`Searching for the program "${this.channelName}"`);
         const normalizedName = this.channelName.trim().toLowerCase().replace(/ /g, '-');
         const searchURL = `https://www.ivoox.com/${normalizedName}_sw_1_1.html`;
-        const searchResponsePage = await got(searchURL);
+        const searchResponsePage = await this.requestIvoox(searchURL);
 
         console.debug(`Looking for the program url.`);
         const $ = cheerio.load(searchResponsePage.body);
@@ -231,6 +231,10 @@ export class IVooxChannel extends Channel {
         console.debug(`Program url: ${programUrl}.`);
 
         return programUrl;
+    }
+
+    private requestIvoox(url: string) {
+        return got(url, IVooxChannel.IVOOX_REQUEST_OPTIONS);
     }
 
    public async generateFeed(): Promise<string | undefined> {
