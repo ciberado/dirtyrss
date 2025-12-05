@@ -8,12 +8,22 @@ import { performance } from 'perf_hooks';
 
 export class IVooxChannel extends Channel {
 
-    private static readonly DATE_AND_DURATION_SELECTOR = 'span.ml-sm-1';
 
-    private static readonly IVOOX_FETCH_TIMEOUT_MS = parseInt(process.env.IVOOX_FETCH_TIMEOUT_MS ?? "10000");
-    private static readonly IVOOX_FETCH_PAGES_BATCH_SIZE = parseInt(process.env.IVOOX_FETCH_PAGES_BATCH_SIZE ?? "5");
-    private static readonly IVOOX_MAX_REQUESTS_PER_SECOND = parseInt(process.env.IVOOX_MAX_CALLS_PER_SECOND ?? "90");
-    private static readonly IVOOX_CHAPTERS_PER_PAGE = parseInt(process.env.IVOOX_CHAPTERS_PER_PAGE ?? "20");
+    private static readonly PODCAST_AUTHOR_SELECTOR:string = 'a.text-black.font-weight-normal';
+    private static readonly PODCAST_DESCRIPTION_SELECTOR:string = '.d-flex > .d-none > .text-truncate-3';
+    private static readonly PODCAST_IMAGE_SELECTOR:string = '.image-wrapper img';
+    private static readonly PODCAST_IMAGE2_SELECTOR:string = '.image-wrapper.pr-2 img';
+    private static readonly PODCAST_NUM_CHAPTERS_SELECTOR:string = '.stat > .text-gray:first';
+
+    private static readonly EPISODE_DATE_AND_DURATION_SELECTOR:string = 'span.ml-sm-1';
+    private static readonly EPISODE_DESCRIPTION_SELECTOR:string = 'div.mb-3 > div > p.text-truncate-5';
+    private static readonly EPISODE_SELECTOR:string = '.d-flex > .d-flex > h3 > a';
+    private static readonly EPISODE_IMAGE_SELECTOR:string = '.d-flex > .image-wrapper.pr-2 > img';
+
+    private static readonly IVOOX_FETCH_TIMEOUT_MS:number = parseInt(process.env.IVOOX_FETCH_TIMEOUT_MS ?? "10000");
+    private static readonly IVOOX_FETCH_PAGES_BATCH_SIZE:number = parseInt(process.env.IVOOX_FETCH_PAGES_BATCH_SIZE ?? "5");
+    private static readonly IVOOX_MAX_REQUESTS_PER_SECOND:number = parseInt(process.env.IVOOX_MAX_CALLS_PER_SECOND ?? "90");
+    private static readonly IVOOX_CHAPTERS_PER_PAGE:number = parseInt(process.env.IVOOX_CHAPTERS_PER_PAGE ?? "20");
 
     private static readonly IVOOX_REQUEST_OPTIONS = {
         headers: {
@@ -45,15 +55,15 @@ export class IVooxChannel extends Channel {
         const $channelPage = cheerio.load(this.channelPageHtml);
 
         this.channelName = $channelPage('h1').text().trim();
-        this.author = $channelPage('a.text-black.font-weight-normal').text().trim();
-        this.description = $channelPage('.d-flex > .d-none > .text-truncate-3').text().trim();
-        this.imageUrl = $channelPage('.image-wrapper img').attr('src')?.trim();
+        this.author = $channelPage(IVooxChannel.PODCAST_AUTHOR_SELECTOR).text().trim();
+        this.description = $channelPage(IVooxChannel.PODCAST_DESCRIPTION_SELECTOR).text().trim();
+        this.imageUrl = $channelPage(IVooxChannel.PODCAST_IMAGE_SELECTOR).attr('src')?.trim();
         if (!this.imageUrl || this.imageUrl.length === 0) {
-            this.imageUrl = $channelPage('.image-wrapper.pr-2 img').attr('data-lazy-src')?.trim();
+            this.imageUrl = $channelPage(IVooxChannel.PODCAST_IMAGE2_SELECTOR).attr('data-lazy-src')?.trim();
         }
         this.ttlInMinutes = 60;
         this.siteUrl = this.channelUrl;
-        this.numChapters = parseInt($channelPage('.stat > .text-gray:first').text().replace('.','').trim());
+        this.numChapters = parseInt($channelPage(IVooxChannel.PODCAST_NUM_CHAPTERS_SELECTOR).text().replace('.','').trim());
         this.link = this.channelUrl;
     }
 
@@ -61,7 +71,7 @@ export class IVooxChannel extends Channel {
         performance.mark(`fetchEpisodeList_${this.channelName.replace(' ','_')}_start`);
         console.log(`Chapters: ${this.numChapters}`);
 
-        const pageNumbers = Array.from({ length: (this.numChapters/IVooxChannel.IVOOX_CHAPTERS_PER_PAGE)+1 }, (_, i) => i + 1);
+        const pageNumbers = Array.from({ length: Math.ceil(this.numChapters/IVooxChannel.IVOOX_CHAPTERS_PER_PAGE) }, (_, i) => i + 1);
         
         let collectedChapters: Chapter[] = [];
         let timeoutReached = false;
@@ -157,11 +167,8 @@ export class IVooxChannel extends Channel {
         const channelResponsePage = await IVooxChannel.limit(async () => await this.requestIvoox(currentPageUrl || ''));
         const $channelPage = cheerio.load(channelResponsePage.body || '');
 
-        //const selector = `.pl-1 > .d-flex > .d-flex > .w-100 > a`;
-        const selector = `.d-flex > .d-flex > h3 > a`
-
         const chapters = await Promise.all(
-              [...$channelPage(selector)]
+              [...$channelPage(IVooxChannel.EPISODE_SELECTOR)]
                 .filter(a => a)
                 .map(a => this.fetchChapterData($(a).text().trim(), `https://ivoox.com${$(a).attr('href')}` || ''))
         );
@@ -187,23 +194,23 @@ export class IVooxChannel extends Channel {
         const id = matches.pop()!;
         const audioRealUrl = audioUrlTempl.replace('12345678', id);
 
-        const description = $chapterPage('div.mb-3 > div > p.text-truncate-5').text().trim();
+        const description = $chapterPage(IVooxChannel.EPISODE_DESCRIPTION_SELECTOR).text().trim();
 
         let date = this.fromSpanishDate('01/01/2000');
         try {
-            date = this.fromSpanishDate($chapterPage(IVooxChannel.DATE_AND_DURATION_SELECTOR).text().split('·')[0].trim() || '01/01/2000');
+            date = this.fromSpanishDate($chapterPage(IVooxChannel.EPISODE_DATE_AND_DURATION_SELECTOR).text().split('·')[0].trim() || '01/01/2000');
         } catch (error) {  
             console.error(`Error fetching date for chapter ${title}:`, error);
         }
         
         let duration = '00:00';
         try {
-          duration = $chapterPage(IVooxChannel.DATE_AND_DURATION_SELECTOR).text().split('·')[1].trim() || '00:00';
+          duration = $chapterPage(IVooxChannel.EPISODE_DATE_AND_DURATION_SELECTOR).text().split('·')[1].trim() || '00:00';
         } catch (error) {
             console.error(`Error fetching duration for chapter ${title}:`, error);
         }
 
-        let img = ($chapterPage('.d-flex > .image-wrapper.pr-2 > img').attr('data-lazy-src') || '').trim();
+        let img = ($chapterPage(IVooxChannel.EPISODE_IMAGE_SELECTOR).attr('data-lazy-src') || '').trim();
         if (img.includes('url=')) {
             img = img.split('url=')[1];
         }
@@ -237,7 +244,7 @@ export class IVooxChannel extends Channel {
         return got(url, IVooxChannel.IVOOX_REQUEST_OPTIONS);
     }
 
-   public async generateFeed(): Promise<string | undefined> {
+    public async generateFeed(): Promise<string | undefined> {
         console.info(`Creating rss feed.`);
         console.debug(`Getting channel ${this.channelName} url.`);
         this.channelUrl = await this.findChannelUrl();

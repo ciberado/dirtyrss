@@ -18,7 +18,7 @@ docker-run:
 	docker start dirtyrss 
 
 docker-clean:clean
-	docker container ls -al | grep dirtyrss && docker stop dirtyrss || true
+	docker container ls -al | grep dirtyrss && docker rm -f dirtyrss || true
 	docker rmi ciberado/dirtyrss || true
 
 docker-build:build
