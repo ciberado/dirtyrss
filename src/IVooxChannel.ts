@@ -78,7 +78,7 @@ export class IVooxChannel extends Channel {
     }
 
     protected async fetchEpisodeList(): Promise<Chapter[]> {
-        performance.mark(`fetchEpisodeList_${this.channelName.replace(' ','_')}_start`);
+        const startTime = performance.now();
         console.log(`Chapters: ${this.numChapters}`);
 
         const pageNumbers = Array.from({ length: Math.ceil(this.numChapters/IVooxChannel.IVOOX_CHAPTERS_PER_PAGE) }, (_, i) => i + 1);
@@ -129,43 +129,33 @@ export class IVooxChannel extends Channel {
     
         collectedChapters.sort((a, b) => b.date.getTime() - a.date.getTime());
 
-        performance.mark(`fetchEpisodeList_${this.channelName.replace(' ','_')}_end`);
-        console.log(performance.measure(
-            `fetchEpisodeList_${this.channelName.replace(' ','_')}`,
-            `fetchEpisodeList_${this.channelName.replace(' ','_')}_start`, 
-            `fetchEpisodeList_${this.channelName.replace(' ','_')}_end`)
-        );
+        const endTime = performance.now();
+        console.log(`fetchEpisodeList completed in ${(endTime - startTime).toFixed(2)}ms`);
 
         return collectedChapters;
     }
     
     private async continueLoadingInBackground(remainingPages: number[], existingChapters: Chapter[]): Promise<void> {
-        performance.mark(`Background_${this.channelName.replace(' ','_')}_start`);
+        const startTime = performance.now();
         console.log(`Continuing chapter fetch in background for ${remainingPages.length} remaining pages`);
         
         let backgroundChaptersCount = 0;
         
         try {
-            // Procesar páginas sin acumular resultados en memoria
             await Promise.allSettled(
                 remainingPages.map(async (page) => {
                     try {
                         const chapters = await this.fetchPageEpisodeList(page);
                         backgroundChaptersCount += chapters.length;
-                        // Los capítulos ya están en cache (guardados en fetchChapterData), no necesitamos retenerlos aquí
                     } catch (error) {
                         console.error(`Error fetching page ${page} in background:`, error);
                     }
                 })
             );
             
-            performance.mark(`Background_${this.channelName.replace(' ','_')}_end`);
+            const endTime = performance.now();
             console.log(`Background fetch completed. Total chapters: ${existingChapters.length + backgroundChaptersCount}, Background chapters: ${backgroundChaptersCount}`);
-            console.log(performance.measure(
-                `Background_${this.channelName.replace(' ','_')}`,
-                `Background_${this.channelName.replace(' ','_')}_start`, 
-                `Background_${this.channelName.replace(' ','_')}_end`)
-            );
+            console.log(`Background fetch completed in ${(endTime - startTime).toFixed(2)}ms`);
             
         } catch (error) {
             console.error('Error during background fetch:', error);
