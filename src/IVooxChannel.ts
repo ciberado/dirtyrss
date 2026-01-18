@@ -50,24 +50,30 @@ export class IVooxChannel extends Channel {
     protected async fetchChannelInformation(): Promise<void> {
         console.info(`Configuring feed from ${this.channelUrl}`);
         const channelHtml = (await this.requestIvoox(this.channelUrl || '')).body;
-        const $channelPage = cheerio.load(channelHtml);
+        
+        let imageUrl: string | undefined;
+        let numChapters: number;
+        {
+            const $channelPage = cheerio.load(channelHtml);
 
-        this.channelName = $channelPage('h1').text().trim();
-        this.author = $channelPage(IVooxChannel.PODCAST_AUTHOR_SELECTOR).text().trim();
-        this.description = $channelPage(IVooxChannel.PODCAST_DESCRIPTION_SELECTOR).text().trim();
-        let imageUrl = $channelPage(IVooxChannel.PODCAST_IMAGE_SELECTOR).attr('src')?.trim();
-        if (!this.imageUrl || this.imageUrl.length === 0) {
-            this.imageUrl = $channelPage(IVooxChannel.PODCAST_IMAGE2_SELECTOR).attr('data-lazy-src')?.trim();
+            this.channelName = $channelPage('h1').text().trim();
+            this.author = $channelPage(IVooxChannel.PODCAST_AUTHOR_SELECTOR).text().trim();
+            this.description = $channelPage(IVooxChannel.PODCAST_DESCRIPTION_SELECTOR).text().trim();
+            imageUrl = $channelPage(IVooxChannel.PODCAST_IMAGE_SELECTOR).attr('src')?.trim();
+            if (!imageUrl || imageUrl.length === 0) {
+                imageUrl = $channelPage(IVooxChannel.PODCAST_IMAGE2_SELECTOR).attr('data-lazy-src')?.trim();
+            }
+            numChapters = parseInt($channelPage(IVooxChannel.PODCAST_NUM_CHAPTERS_SELECTOR).text().replace('.','').trim());
         }
+        
         if (imageUrl && imageUrl.includes('url=')) {
             imageUrl = imageUrl.split('url=')[1];
         }
         this.imageUrl = imageUrl || '';
-
         
         this.ttlInMinutes = 60;
         this.siteUrl = this.channelUrl;
-        this.numChapters = parseInt($channelPage(IVooxChannel.PODCAST_NUM_CHAPTERS_SELECTOR).text().replace('.','').trim());
+        this.numChapters = numChapters;
         this.link = this.channelUrl;
     }
 
@@ -172,14 +178,25 @@ export class IVooxChannel extends Channel {
         console.log(`  +Fetching page ${pageNumber} from ${currentPageUrl}`);
 
         const pageHtml = (await IVooxChannel.limit(async () => await this.requestIvoox(currentPageUrl || ''))).body || '';
-        const $channelPage = cheerio.load(pageHtml);
-
-        const episodeElements = $channelPage(IVooxChannel.EPISODE_SELECTOR).toArray();
+        
+        const episodesData: Array<{title: string, url: string}> = [];
+        {
+            const $channelPage = cheerio.load(pageHtml);
+            const episodeElements = $channelPage(IVooxChannel.EPISODE_SELECTOR).toArray();
+            
+            for (const element of episodeElements) {
+                if (element) {
+                    const $elem = $channelPage(element);
+                    episodesData.push({
+                        title: $elem.text().trim(),
+                        url: `https://ivoox.com${$elem.attr('href')}` || ''
+                    });
+                }
+            }
+        }
         
         const chapters = await Promise.all(
-              episodeElements
-                .filter(a => a)
-                .map(a => this.fetchChapterData($channelPage(a).text().trim(), `https://ivoox.com${$channelPage(a).attr('href')}` || ''))
+            episodesData.map(ep => this.fetchChapterData(ep.title, ep.url))
         );
         return chapters;
     }
@@ -195,39 +212,44 @@ export class IVooxChannel extends Channel {
         const chapterHtml = (await IVooxChannel.limit(async () => await this.requestIvoox(url))).body;
         console.debug(`    ++Podcast "${this.channelName}" chapter "${title}", url=(${url}).`);
 
-        const $chapterPage = cheerio.load(chapterHtml);
-
         const audioUrlTempl = "https://www.ivoox.com/listenembeded_mn_12345678_1.mp3?source=EMBEDEDHTML5";
 
         const matches = url.match(/\d{6,12}/g) || [];
         const id = matches.pop()!;
         const audioRealUrl = audioUrlTempl.replace('12345678', id);
 
-        const description = $chapterPage(IVooxChannel.EPISODE_DESCRIPTION_SELECTOR).text().trim();
+        let description: string;
+        let date: Date;
+        let duration: string;
+        let img: string;
+        {
+            const $chapterPage = cheerio.load(chapterHtml);
 
-        let date = this.fromSpanishDate('01/01/2000');
-        try {
-            date = this.fromSpanishDate($chapterPage(IVooxChannel.EPISODE_DATE_AND_DURATION_SELECTOR).text().split('·')[0].trim() || '01/01/2000');
-        } catch (error) {  
-            console.error(`Error fetching date for chapter ${title}:`, error);
+            description = $chapterPage(IVooxChannel.EPISODE_DESCRIPTION_SELECTOR).text().trim();
+
+            date = this.fromSpanishDate('01/01/2000');
+            try {
+                date = this.fromSpanishDate($chapterPage(IVooxChannel.EPISODE_DATE_AND_DURATION_SELECTOR).text().split('·')[0].trim() || '01/01/2000');
+            } catch (error) {  
+                console.error(`Error fetching date for chapter ${title}:`, error);
+            }
+            
+            duration = '00:00';
+            try {
+                duration = $chapterPage(IVooxChannel.EPISODE_DATE_AND_DURATION_SELECTOR).text().split('·')[1].trim() || '00:00';
+            } catch (error) {
+                console.error(`Error fetching duration for chapter ${title}:`, error);
+            }
+
+            img = ($chapterPage(IVooxChannel.EPISODE_IMAGE_SELECTOR).attr('src') || '').trim();
+            if(img === '') {
+                img = ($chapterPage(IVooxChannel.EPISODE_IMAGE_SELECTOR).attr('data-lazy-src') || '').trim();
+            }
         }
         
-        let duration = '00:00';
-        try {
-          duration = $chapterPage(IVooxChannel.EPISODE_DATE_AND_DURATION_SELECTOR).text().split('·')[1].trim() || '00:00';
-        } catch (error) {
-            console.error(`Error fetching duration for chapter ${title}:`, error);
-        }
-
-        let img = ($chapterPage(IVooxChannel.EPISODE_IMAGE_SELECTOR).attr('src') || '').trim();
-        if(img === '') {
-            img = ($chapterPage(IVooxChannel.EPISODE_IMAGE_SELECTOR).attr('data-lazy-src') || '').trim();
-        }
-    
         if (img.includes('url=')) {
             img = img.split('url=')[1];
         }
-        //img = `https://img-static.ivoox.com/index.php?w=175&h=175&url=${img}`;
 
         const chapter = new Chapter(id, title, audioRealUrl, description, date, img, duration);
         
@@ -243,11 +265,15 @@ export class IVooxChannel extends Channel {
         const searchHtml = (await this.requestIvoox(searchURL)).body;
 
         console.debug(`Looking for the program url.`);
-        const $ = cheerio.load(searchHtml);
-        const selector = `.modulo-type-programa .header-modulo a`;
-        const anchor = $(selector);
-
-        const programUrl = anchor.attr('href')?.toString();
+        
+        let programUrl: string | undefined;
+        {
+            const $ = cheerio.load(searchHtml);
+            const selector = `.modulo-type-programa .header-modulo a`;
+            const anchor = $(selector);
+            programUrl = anchor.attr('href')?.toString();
+        }
+        
         console.debug(`Program url: ${programUrl}.`);
 
         return programUrl;
