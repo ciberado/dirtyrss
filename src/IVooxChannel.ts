@@ -134,27 +134,29 @@ export class IVooxChannel extends Channel {
         performance.mark(`Background_${this.channelName.replace(' ','_')}_start`);
         console.log(`Continuing chapter fetch in background for ${remainingPages.length} remaining pages`);
         
+        let backgroundChaptersCount = 0;
+        
         try {
-            const backgroundPromises = remainingPages.map(async (page) => {
-                try {
-                    return await this.fetchPageEpisodeList(page);
-                } catch (error) {
-                    console.error(`Error fetching page ${page} in background:`, error);
-                    return [];
-                }
-            });
-    
-            const newChapters = (await Promise.all(backgroundPromises))
-                .flat();
+            // Procesar páginas sin acumular resultados en memoria
+            await Promise.allSettled(
+                remainingPages.map(async (page) => {
+                    try {
+                        const chapters = await this.fetchPageEpisodeList(page);
+                        backgroundChaptersCount += chapters.length;
+                        // Los capítulos ya están en cache (guardados en fetchChapterData), no necesitamos retenerlos aquí
+                    } catch (error) {
+                        console.error(`Error fetching page ${page} in background:`, error);
+                    }
+                })
+            );
             
             performance.mark(`Background_${this.channelName.replace(' ','_')}_end`);
-            console.log(`Background fetch completed. Total chapters: ${existingChapters.length+newChapters.length}, Background chapters: ${backgroundPromises.length}`);
+            console.log(`Background fetch completed. Total chapters: ${existingChapters.length + backgroundChaptersCount}, Background chapters: ${backgroundChaptersCount}`);
             console.log(performance.measure(
                 `Background_${this.channelName.replace(' ','_')}`,
                 `Background_${this.channelName.replace(' ','_')}_start`, 
                 `Background_${this.channelName.replace(' ','_')}_end`)
             );
-            
             
         } catch (error) {
             console.error('Error during background fetch:', error);
