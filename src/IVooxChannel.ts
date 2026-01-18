@@ -18,7 +18,7 @@ export class IVooxChannel extends Channel {
     private static readonly EPISODE_DATE_AND_DURATION_SELECTOR:string = 'span.ml-sm-1';
     private static readonly EPISODE_DESCRIPTION_SELECTOR:string = 'div.mb-3 > div > p.text-truncate-5';
     private static readonly EPISODE_SELECTOR:string = '.d-flex > .d-flex > h3 > a';
-    private static readonly EPISODE_IMAGE_SELECTOR:string = '.d-flex > .image-wrapper.pr-2 > img';
+    private static readonly EPISODE_IMAGE_SELECTOR:string = '.image-wrapper.pr-2 > picture > img';
 
     private static readonly IVOOX_FETCH_TIMEOUT_MS:number = parseInt(process.env.IVOOX_FETCH_TIMEOUT_MS ?? "10000");
     private static readonly IVOOX_FETCH_PAGES_BATCH_SIZE:number = parseInt(process.env.IVOOX_FETCH_PAGES_BATCH_SIZE ?? "5");
@@ -57,10 +57,16 @@ export class IVooxChannel extends Channel {
         this.channelName = $channelPage('h1').text().trim();
         this.author = $channelPage(IVooxChannel.PODCAST_AUTHOR_SELECTOR).text().trim();
         this.description = $channelPage(IVooxChannel.PODCAST_DESCRIPTION_SELECTOR).text().trim();
-        this.imageUrl = $channelPage(IVooxChannel.PODCAST_IMAGE_SELECTOR).attr('src')?.trim();
+        let imageUrl = $channelPage(IVooxChannel.PODCAST_IMAGE_SELECTOR).attr('src')?.trim();
         if (!this.imageUrl || this.imageUrl.length === 0) {
             this.imageUrl = $channelPage(IVooxChannel.PODCAST_IMAGE2_SELECTOR).attr('data-lazy-src')?.trim();
         }
+        if (imageUrl && imageUrl.includes('url=')) {
+            imageUrl = imageUrl.split('url=')[1];
+        }
+        this.imageUrl = imageUrl || '';
+
+        
         this.ttlInMinutes = 60;
         this.siteUrl = this.channelUrl;
         this.numChapters = parseInt($channelPage(IVooxChannel.PODCAST_NUM_CHAPTERS_SELECTOR).text().replace('.','').trim());
@@ -210,11 +216,15 @@ export class IVooxChannel extends Channel {
             console.error(`Error fetching duration for chapter ${title}:`, error);
         }
 
-        let img = ($chapterPage(IVooxChannel.EPISODE_IMAGE_SELECTOR).attr('data-lazy-src') || '').trim();
+        let img = ($chapterPage(IVooxChannel.EPISODE_IMAGE_SELECTOR).attr('src') || '').trim();
+        if(img === '') {
+            img = ($chapterPage(IVooxChannel.EPISODE_IMAGE_SELECTOR).attr('data-lazy-src') || '').trim();
+        }
+    
         if (img.includes('url=')) {
             img = img.split('url=')[1];
         }
-        img = `https://img-static.ivoox.com/index.php?w=175&h=175&url=${img}`;
+        //img = `https://img-static.ivoox.com/index.php?w=175&h=175&url=${img}`;
 
         const chapter = new Chapter(id, title, audioRealUrl, description, date, img, duration);
         

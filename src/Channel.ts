@@ -38,9 +38,14 @@ export abstract class Channel {
             author: this.author,
             description: this.description,
             imageUrl: this.imageUrl,
+            itunesImage: this.imageUrl,
             ttl: this.ttlInMinutes,
             siteUrl: this.link,
-            generator: 'dirtyrss'
+            generator: 'dirtyrss',
+            customNamespaces: {
+                itunes: 'http://www.itunes.com/dtds/podcast-1.0.dtd',
+                podcast: 'https://podcastindex.org/namespace/1.0',
+            }
         });
 
         chapters.forEach(c => {

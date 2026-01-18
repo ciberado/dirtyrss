@@ -32,7 +32,7 @@
     "node-cache": "^5.1.2",
     "p-ratelimit": "^1.0.1",
     "perf_hooks": "^0.0.1",
-    "podcast": "^2.0.0",
+    "podcast": "^2.0.1",
     "python-shell": "^3.0.1"
   }
 }
