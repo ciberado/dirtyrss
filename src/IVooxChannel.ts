@@ -97,9 +97,12 @@ export class IVooxChannel extends Channel {
                     const batchResults = await Promise.race([
                         Promise.all(batch.map(page => this.fetchPageEpisodeList(page))),
                         timeoutPromise
-                    ]);
+                    ]) as Chapter[][];
     
-                    collectedChapters.push(...batchResults.flat());
+                    // Aplanar directamente sin crear array intermedio con flat()
+                    for (const pageChapters of batchResults) {
+                        collectedChapters.push(...pageChapters);
+                    }
                 } catch (error) {
                     if (timeoutReached && collectedChapters.length < this.numChapters) {
                         //Iniciar carga en background para las páginas restantes, solo llenamos la cache
