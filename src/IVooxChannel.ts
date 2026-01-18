@@ -32,7 +32,6 @@ export class IVooxChannel extends Channel {
     }
 
     private channelUrl? : string;
-    private channelPageHtml?: string;
     private numChapters:number = 0;
 
     constructor(channelName: string) {
@@ -51,8 +50,7 @@ export class IVooxChannel extends Channel {
     protected async fetchChannelInformation(): Promise<void> {
         console.info(`Configuring feed from ${this.channelUrl}`);
         const channelResponsePage = await this.requestIvoox(this.channelUrl || '');
-        this.channelPageHtml = channelResponsePage.body;
-        const $channelPage = cheerio.load(this.channelPageHtml);
+        const $channelPage = cheerio.load(channelResponsePage.body);
 
         this.channelName = $channelPage('h1').text().trim();
         this.author = $channelPage(IVooxChannel.PODCAST_AUTHOR_SELECTOR).text().trim();
@@ -165,18 +163,18 @@ export class IVooxChannel extends Channel {
 
     private async fetchPageEpisodeList(pageNumber: number) : Promise<Chapter[]> {
 
-        const $ = cheerio.load('');
-
         const currentPageUrl = this.channelUrl?.replace('_1.html', `_${pageNumber}.html`);
         console.log(`  +Fetching page ${pageNumber} from ${currentPageUrl}`);
 
         const channelResponsePage = await IVooxChannel.limit(async () => await this.requestIvoox(currentPageUrl || ''));
         const $channelPage = cheerio.load(channelResponsePage.body || '');
 
+        const episodeElements = $channelPage(IVooxChannel.EPISODE_SELECTOR).toArray();
+        
         const chapters = await Promise.all(
-              [...$channelPage(IVooxChannel.EPISODE_SELECTOR)]
+              episodeElements
                 .filter(a => a)
-                .map(a => this.fetchChapterData($(a).text().trim(), `https://ivoox.com${$(a).attr('href')}` || ''))
+                .map(a => this.fetchChapterData($channelPage(a).text().trim(), `https://ivoox.com${$channelPage(a).attr('href')}` || ''))
         );
         return chapters;
     }
