@@ -49,8 +49,8 @@ export class IVooxChannel extends Channel {
 
     protected async fetchChannelInformation(): Promise<void> {
         console.info(`Configuring feed from ${this.channelUrl}`);
-        const channelResponsePage = await this.requestIvoox(this.channelUrl || '');
-        const $channelPage = cheerio.load(channelResponsePage.body);
+        const channelHtml = (await this.requestIvoox(this.channelUrl || '')).body;
+        const $channelPage = cheerio.load(channelHtml);
 
         this.channelName = $channelPage('h1').text().trim();
         this.author = $channelPage(IVooxChannel.PODCAST_AUTHOR_SELECTOR).text().trim();
@@ -171,8 +171,8 @@ export class IVooxChannel extends Channel {
         const currentPageUrl = this.channelUrl?.replace('_1.html', `_${pageNumber}.html`);
         console.log(`  +Fetching page ${pageNumber} from ${currentPageUrl}`);
 
-        const channelResponsePage = await IVooxChannel.limit(async () => await this.requestIvoox(currentPageUrl || ''));
-        const $channelPage = cheerio.load(channelResponsePage.body || '');
+        const pageHtml = (await IVooxChannel.limit(async () => await this.requestIvoox(currentPageUrl || ''))).body || '';
+        const $channelPage = cheerio.load(pageHtml);
 
         const episodeElements = $channelPage(IVooxChannel.EPISODE_SELECTOR).toArray();
         
@@ -192,10 +192,10 @@ export class IVooxChannel extends Channel {
             return cachedChapter;
         }
         
-        const programResponsePage = await IVooxChannel.limit(async () => await this.requestIvoox(url));
+        const chapterHtml = (await IVooxChannel.limit(async () => await this.requestIvoox(url))).body;
         console.debug(`    ++Podcast "${this.channelName}" chapter "${title}", url=(${url}).`);
 
-        const $chapterPage = cheerio.load(programResponsePage.body);
+        const $chapterPage = cheerio.load(chapterHtml);
 
         const audioUrlTempl = "https://www.ivoox.com/listenembeded_mn_12345678_1.mp3?source=EMBEDEDHTML5";
 
@@ -240,10 +240,10 @@ export class IVooxChannel extends Channel {
         console.info(`Searching for the program "${this.channelName}"`);
         const normalizedName = this.channelName.trim().toLowerCase().replace(/ /g, '-');
         const searchURL = `https://www.ivoox.com/${normalizedName}_sw_1_1.html`;
-        const searchResponsePage = await this.requestIvoox(searchURL);
+        const searchHtml = (await this.requestIvoox(searchURL)).body;
 
         console.debug(`Looking for the program url.`);
-        const $ = cheerio.load(searchResponsePage.body);
+        const $ = cheerio.load(searchHtml);
         const selector = `.modulo-type-programa .header-modulo a`;
         const anchor = $(selector);
 
