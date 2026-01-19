@@ -76,11 +76,14 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId.mp3', async 
         const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix);
         const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, req.params.episodeId);
         console.info("File name", fileName);
-        const downloadFile = fileName || `${FASTIFY_STATIC}/downloading.mp3`;
-        console.info("Download file", downloadFile);
         
-        const stat = fs.statSync(downloadFile);
-        const filename = path.basename(downloadFile);
+        if (!fileName) {
+            console.info(`Episode ${req.params.episodeId} not ready yet, triggering download`);
+            return reply.code(503).type('text/html').send(`Episode ${req.params.episodeId} is being downloaded. Please try again in a few minutes.`);
+        }
+        
+        const stat = fs.statSync(fileName);
+        const filename = path.basename(fileName);
         console.info("File size from stat:", stat.size);
         
         reply
@@ -88,7 +91,7 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId.mp3', async 
             .header('Content-Length', stat.size)
             .header('Content-Disposition', `attachment; filename="${req.params.episodeId}.mp3"`);
         
-        const stream = fs.createReadStream(downloadFile);
+        const stream = fs.createReadStream(fileName);
         return reply.send(stream);
     } catch (err) {
         console.warn(err);
