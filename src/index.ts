@@ -80,13 +80,12 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId', async (req
         const stat = fs.statSync(downloadFile);
         console.info("File size from stat:", stat.size);
         
-        reply.raw.writeHead(200, {
-            'Content-Type': 'audio/mp3',
-            'Content-Length': stat.size
-        });
+        reply
+            .header('Content-Type', 'audio/mp3')
+            .header('Content-Length', stat.size);
         
         const stream = fs.createReadStream(downloadFile);
-        stream.pipe(reply.raw);
+        return reply.send(stream);
     } catch (err) {
         console.warn(err);
         reply.code(404).type('text/html').send(`Error downloading ${req.params.episodeId} of ${req.params.episodeId} (${err}).`);
