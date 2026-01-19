@@ -1,5 +1,5 @@
 import { Podcast } from 'podcast';
-import { Chapter } from './Chapter.js';
+import { Chapter } from '../models/Chapter.js';
 import { performance } from 'perf_hooks';
 
 export abstract class Channel {

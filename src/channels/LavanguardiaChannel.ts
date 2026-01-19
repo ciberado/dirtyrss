@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio"; 
 import { default as got } from 'got';
-import { Chapter } from './Chapter.js';
+import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
 
 

@@ -4,9 +4,9 @@ import fse from 'fs-extra';
 
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
-import { IVooxChannel } from './IVooxChannel.js';
-import { TwitchChannel } from './TwitchChannel.js';
-import { LavanguardiaChannel } from './LavanguardiaChannel.js';
+import { IVooxChannel } from './channels/IVooxChannel.js';
+import { TwitchChannel } from './channels/TwitchChannel.js';
+import { LavanguardiaChannel } from './channels/LavanguardiaChannel.js';
 
 const FASTIFY_PORT = parseInt(process.env.PORT!) || 3000;
 
@@ -49,7 +49,7 @@ interface TwitchParamType {
 
 fastify.get<{Params : TwitchParamType}>('/twitch/:showId', async (req, reply) => {
     try {
-        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}`;
+        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}:${req.port}`;
         const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix);
         const xmlFeed = await tc.generateFeed();
         reply.send(xmlFeed);            
@@ -61,11 +61,23 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId', async (req, reply) =>
 
 fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId', async (req, reply) => {
     try {
-        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}`;
+        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}:${req.port}`;
         const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix);
         const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, req.params.episodeId);
-        const url = fileName ? fileName.substring(FASTIFY_STATIC.length) : 'downloading.mp3';
-        reply.download(url);    
+        console.info("File name", fileName);
+        const downloadFile = fileName || `${FASTIFY_STATIC}/downloading.mp3`;
+        console.info("Download file", downloadFile);
+        
+        const stat = fs.statSync(downloadFile);
+        console.info("File size from stat:", stat.size);
+        
+        reply.raw.writeHead(200, {
+            'Content-Type': 'audio/aac',
+            'Content-Length': stat.size
+        });
+        
+        const stream = fs.createReadStream(downloadFile);
+        stream.pipe(reply.raw);
     } catch (err) {
         console.warn(err);
         reply.code(404).type('text/html').send(`Error downloading ${req.params.episodeId} of ${req.params.episodeId} (${err}).`);

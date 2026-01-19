@@ -1,13 +1,15 @@
 import * as cheerio from "cheerio"; 
 import { pRateLimit } from 'p-ratelimit';
 import { default as got } from 'got';
-import { Chapter } from './Chapter.js';
+import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
-import NodeCache from 'node-cache';
 import { performance } from 'perf_hooks';
-import { createHash } from 'crypto';
+import { IChapterCache, ChapterCacheKey } from '../cache/IChapterCache.js';
+import { InMemoryChapterCache } from '../cache/InMemoryChapterCache.js';
 
 export class IVooxChannel extends Channel {
+    
+    private static chapterCache: IChapterCache = new InMemoryChapterCache();
 
 
     private static readonly PODCAST_AUTHOR_SELECTOR:string = 'a.text-black.font-weight-normal';
@@ -95,24 +97,20 @@ export class IVooxChannel extends Channel {
         });
     
         try {
-            // Dividir las páginas en lotes
             for (let i = 0; i < pageNumbers.length && !timeoutReached; i += IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE) {
                 const batch = pageNumbers.slice(i, i + IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE);
                 
                 try {
-                    // Procesar el lote actual
                     const batchResults = await Promise.race([
                         Promise.all(batch.map(page => this.fetchPageEpisodeList(page))),
                         timeoutPromise
                     ]) as Chapter[][];
     
-                    // Aplanar directamente sin crear array intermedio con flat()
                     for (const pageChapters of batchResults) {
                         collectedChapters.push(...pageChapters);
                     }
                 } catch (error) {
                     if (timeoutReached && collectedChapters.length < this.numChapters) {
-                        //Iniciar carga en background para las páginas restantes, solo llenamos la cache
                         const remainingPages = pageNumbers.slice(i + batch.length);
                         if (remainingPages.length > 0) {
                             this.continueLoadingInBackground(remainingPages, collectedChapters);
@@ -193,9 +191,9 @@ export class IVooxChannel extends Channel {
     }
 
     private async fetchChapterData(title: string, url: string): Promise<Chapter> {
-        const cacheKey = createHash('md5').update(url).digest('hex');
+        const cacheKey = ChapterCacheKey.fromUrl(url);
         
-        const cachedChapter =   IVooxChannel.chapterCache.get<Chapter>(cacheKey);
+        const cachedChapter = IVooxChannel.chapterCache.get(cacheKey);
         if (cachedChapter) {
             return cachedChapter;
         }
@@ -292,9 +290,9 @@ export class IVooxChannel extends Channel {
         concurrency: IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND*1.2,
         maxDelay: 5 * 60000
     });
-
-    private static chapterCache: NodeCache = new NodeCache({ 
-        stdTTL: 0, // Tiempo de vida en segundos
-    });
+    
+    public static setChapterCache(cache: IChapterCache): void {
+        IVooxChannel.chapterCache = cache;
+    }
 }
 //# sourceMappingURL=IVooxChannel.js.map

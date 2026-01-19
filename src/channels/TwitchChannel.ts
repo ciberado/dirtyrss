@@ -7,8 +7,7 @@ import commandExists from 'command-exists';
 import { downloadRelease } from '@terascope/fetch-github-release';
 import {PythonShell} from 'python-shell';
 
-import { Chapter } from './Chapter.js';
-
+import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
 
 interface TwitchVideoData {
