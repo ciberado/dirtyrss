@@ -53,6 +53,7 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId', async (req, reply) =>
         const port = req.port || defaultPort;
         const portSuffix = (port === 80 && req.protocol === 'http') || (port === 443 && req.protocol === 'https') ? '' : `:${port}`;
         const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}${portSuffix}`;
+        console.log("chapterUrlPrefix", chapterUrlPrefix);
         const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix);
         const xmlFeed = await tc.generateFeed();
         reply.send(xmlFeed);            
