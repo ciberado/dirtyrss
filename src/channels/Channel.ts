@@ -59,7 +59,7 @@ export abstract class Channel {
                 enclosure: {
                     url: c.fileUrl,
                     type: c.mimeType,
-                    length: c.length
+                    size: c.length
                 }
             });
         });
