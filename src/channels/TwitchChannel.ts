@@ -83,8 +83,19 @@ export class TwitchChannel extends Channel{
                             duration = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
                         }
                         
+                        // Calculate file size: real if exists, estimated (5 hours @ 1MB/min) if not
+                        let fileSize = 5 * 60 * 1024 * 1024; // 5 hours default
+                        const filePath = `${process.env.FASTIFY_STATIC || '/tmp/public'}/twitch/${tc.id}.mp3`;
+                        try {
+                            if (fs.existsSync(filePath)) {
+                                fileSize = fs.statSync(filePath).size;
+                            }
+                        } catch (err) {
+                            // Use default size
+                        }
+                        
                         return new Chapter(
-                            tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.username}/${tc.id}.mp3`, tc.title, new Date(tc.publishedAt), '', duration, 'audio/mpeg'
+                            tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.username}/${tc.id}.mp3`, tc.title, new Date(tc.publishedAt), '', duration, 'audio/mpeg', fileSize
                         );
                     });
                 resolve(chapters);

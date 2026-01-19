@@ -58,7 +58,8 @@ export abstract class Channel {
                 itunesDuration : c.duration,
                 enclosure: {
                     url: c.fileUrl,
-                    type: c.mimeType
+                    type: c.mimeType,
+                    length: c.length
                 }
             });
         });

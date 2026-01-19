@@ -7,8 +7,9 @@ export class Chapter {
     private _image: string;
     private _duration: string;
     private _mimeType: string;
+    private _length: number;
 
-    constructor(id: string, title: string, fileUrl: string, description: string, date: Date, image: string, duration: string, mimeType: string = 'audio/mpeg') {
+    constructor(id: string, title: string, fileUrl: string, description: string, date: Date, image: string, duration: string, mimeType: string = 'audio/mpeg', length: number = 0) {
         this._id = id;
         this._title = title;
         this._fileUrl = fileUrl;
@@ -17,6 +18,7 @@ export class Chapter {
         this._image = image;
         this._duration = duration;
         this._mimeType = mimeType;
+        this._length = length;
     }
 
     public get id() {
@@ -49,6 +51,10 @@ export class Chapter {
 
     public get mimeType() {
         return this._mimeType;
+    }
+
+    public get length() {
+        return this._length;
     }
 }
 //# sourceMappingURL=Chapter.js.map
