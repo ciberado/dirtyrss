@@ -105,8 +105,7 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId.mp3', async 
             reply
                 .header('Content-Type', 'audio/mpeg')
                 .header('Content-Length', fileSize)
-                .header('Accept-Ranges', 'bytes')
-                .header('Content-Disposition', `attachment; filename="${req.params.episodeId}.mp3"`);
+                .header('Accept-Ranges', 'bytes');
             
             const stream = fs.createReadStream(fileName);
             return reply.send(stream);
