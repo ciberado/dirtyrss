@@ -15,6 +15,7 @@ interface TwitchVideoData {
     id: string;
     title: string;
     publishedAt : string;
+    lengthSeconds: number;
     creator : {
         login : string,
         displayName : string
@@ -73,9 +74,19 @@ export class TwitchChannel extends Channel{
                 console.log('List of episodes retrieved.');
                 const twitchChapters = results as TwitchChannelData[];
                 const chapters = !twitchChapters ? [] :
-                    twitchChapters[0].videos.map(tc => new Chapter(
-                    tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.username}/${tc.id}.mp3`, tc.title, new Date(tc.publishedAt), '', '', 'audio/mpeg'
-                ));
+                    twitchChapters[0].videos.map(tc => {
+                        let duration = '';
+                        if (tc.lengthSeconds) {
+                            const hours = Math.floor(tc.lengthSeconds / 3600);
+                            const minutes = Math.floor((tc.lengthSeconds % 3600) / 60);
+                            const seconds = tc.lengthSeconds % 60;
+                            duration = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                        }
+                        
+                        return new Chapter(
+                            tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.username}/${tc.id}.mp3`, tc.title, new Date(tc.publishedAt), '', duration, 'audio/mpeg'
+                        );
+                    });
                 resolve(chapters);
             });
     
