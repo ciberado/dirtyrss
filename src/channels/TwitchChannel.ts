@@ -112,6 +112,13 @@ export class TwitchChannel extends Channel{
                 console.log(`Episode ${episodeId} already being downloaded.`);
                 return;
             }
+            
+            const tempMp3File = fileName.replace('.mp3', '.tmp.mp3');
+            if (fs.existsSync(tempMp3File)) {
+                console.log(`Episode ${episodeId} is already being converted (${tempMp3File} exists).`);
+                return;
+            }
+            
             const dir = path.dirname(fileName);
             if (!fs.existsSync(dir)){
                 fs.mkdirSync(dir, { recursive: true });
