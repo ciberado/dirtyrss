@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { exec } from 'child_process';
 
 import * as cheerio from "cheerio"; 
 import { default as got } from 'got';
@@ -73,7 +74,7 @@ export class TwitchChannel extends Channel{
                 const twitchChapters = results as TwitchChannelData[];
                 const chapters = !twitchChapters ? [] :
                     twitchChapters[0].videos.map(tc => new Chapter(
-                    tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.username}/${tc.id}`, tc.title, new Date(tc.publishedAt), '', ''
+                    tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.username}/${tc.id}.mp3`, tc.title, new Date(tc.publishedAt), '', '', 'audio/mpeg'
                 ));
                 resolve(chapters);
             });
@@ -91,25 +92,41 @@ export class TwitchChannel extends Channel{
             if (!fs.existsSync(dir)){
                 fs.mkdirSync(dir, { recursive: true });
             }
+            
+            const tempM4aFile = fileName.replace('.mp3', '.m4a');
             const opt = {
                 mode: 'text' as const,
                 pythonPath: '/usr/bin/python3',
                 pythonOptions: [], 
                 scriptPath: path.dirname(TwitchChannel.twitchDlPath),
-                args: ['download', episodeId, `--output`, fileName, `--overwrite`,
+                args: ['download', episodeId, `--output`, tempM4aFile, `--overwrite`,
                        `--quality`, `audio_only`]
               };
         
             console.log(`Downloading episode ${episodeId} in the background`);
             TwitchChannel.downloadingEpisodes[episodeId] = true;
             PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, (err, results) => {
-                delete TwitchChannel.downloadingEpisodes[episodeId];
                 if (err) {
+                    delete TwitchChannel.downloadingEpisodes[episodeId];
                     console.error(`[ERROR] Downloading twitch show ${episodeId} (${err}).`);
                     reject(err);
+                    return;
                 }
-                console.log(`Episode downloaded at ${fileName}.`);
-                resolve({fileName});
+                console.log(`Episode downloaded at ${tempM4aFile}, converting to MP3...`);
+                
+                // Convert M4A to MP3 using ffmpeg
+                exec(`ffmpeg -i "${tempM4aFile}" -codec:a libmp3lame -qscale:a 2 "${fileName}" -y`, (convertErr: any) => {
+                    delete TwitchChannel.downloadingEpisodes[episodeId];
+                    if (convertErr) {
+                        console.error(`[ERROR] Converting ${episodeId} to MP3 (${convertErr}).`);
+                        reject(convertErr);
+                        return;
+                    }
+                    // Delete temp M4A file
+                    fs.unlinkSync(tempM4aFile);
+                    console.log(`Episode converted to MP3 at ${fileName}.`);
+                    resolve({fileName});
+                });
             });
     
         });

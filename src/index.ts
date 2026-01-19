@@ -54,6 +54,7 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId', async (req, reply) =>
         const defaultPort = req.protocol === 'https' ? 443 : 80;
         const port = req.port || defaultPort;
         const portSuffix = (port === 80 && req.protocol === 'http') || (port === 443 && req.protocol === 'https') ? '' : `:${port}`;
+        console.info(`[REQUEST] ${req.method} ${req.protocol}://${req.hostname}${portSuffix}${req.url}`);
         const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}${portSuffix}`;
         console.log("chapterUrlPrefix", chapterUrlPrefix);
         const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix);
@@ -65,11 +66,12 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId', async (req, reply) =>
     }
 });
 
-fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId', async (req, reply) => {
+fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId.mp3', async (req, reply) => {
     try {
         const defaultPort = req.protocol === 'https' ? 443 : 80;
         const port = req.port || defaultPort;
         const portSuffix = (port === 80 && req.protocol === 'http') || (port === 443 && req.protocol === 'https') ? '' : `:${port}`;
+        console.info(`[REQUEST] ${req.method} ${req.protocol}://${req.hostname}${portSuffix}${req.url}`);
         const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}${portSuffix}`;
         const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix);
         const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, req.params.episodeId);
@@ -78,11 +80,13 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId', async (req
         console.info("Download file", downloadFile);
         
         const stat = fs.statSync(downloadFile);
+        const filename = path.basename(downloadFile);
         console.info("File size from stat:", stat.size);
         
         reply
-            .header('Content-Type', 'audio/mp3')
-            .header('Content-Length', stat.size);
+            .header('Content-Type', 'audio/mpeg')
+            .header('Content-Length', stat.size)
+            .header('Content-Disposition', `attachment; filename="${req.params.episodeId}.mp3"`);
         
         const stream = fs.createReadStream(downloadFile);
         return reply.send(stream);
