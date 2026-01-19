@@ -116,7 +116,7 @@ export class TwitchChannel extends Channel{
     }
 
     public getFileNameForEpisode(directoryRoot: string, episodeId: string) : string | undefined {
-        const fileName = `${directoryRoot}/twitch/${episodeId}.aac`;
+        const fileName = `${directoryRoot}/twitch/${episodeId}.mp3`;
         console.log(`Ensuring ${fileName} is available.`);
 
         // check if the file exists, or return the default one
