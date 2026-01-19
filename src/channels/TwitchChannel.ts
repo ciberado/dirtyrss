@@ -138,8 +138,9 @@ export class TwitchChannel extends Channel{
                 }
                 console.log(`Episode downloaded at ${tempM4aFile}, converting to MP3...`);
                 
-                // Convert M4A to MP3 using ffmpeg
-                exec(`ffmpeg -i "${tempM4aFile}" -codec:a libmp3lame -qscale:a 2 "${fileName}" -y`, (convertErr: any) => {
+                // Convert M4A to MP3 using ffmpeg to a temp file, then rename
+                const tempMp3File = fileName + '.tmp';
+                exec(`ffmpeg -i "${tempM4aFile}" -codec:a libmp3lame -qscale:a 2 "${tempMp3File}" -y`, (convertErr: any) => {
                     delete TwitchChannel.downloadingEpisodes[episodeId];
                     if (convertErr) {
                         console.error(`[ERROR] Converting ${episodeId} to MP3 (${convertErr}).`);
@@ -148,6 +149,8 @@ export class TwitchChannel extends Channel{
                     }
                     // Delete temp M4A file
                     fs.unlinkSync(tempM4aFile);
+                    // Rename temp MP3 to final name (atomic operation)
+                    fs.renameSync(tempMp3File, fileName);
                     console.log(`Episode converted to MP3 at ${fileName}.`);
                     resolve({fileName});
                 });
