@@ -6,10 +6,12 @@ import { Channel } from './Channel.js';
 import { performance } from 'perf_hooks';
 import { IChapterCache, ChapterCacheKey } from '../cache/IChapterCache.js';
 import { InMemoryChapterCache } from '../cache/InMemoryChapterCache.js';
+import { RedisChapterCache } from '../cache/RedisChapterCache.js';
 
 export class IVooxChannel extends Channel {
     
-    private static chapterCache: IChapterCache = new InMemoryChapterCache();
+    private static chapterCache: IChapterCache;
+    private static cacheInitialized: boolean = false;
 
 
     private static readonly PODCAST_AUTHOR_SELECTOR:string = 'a.text-black.font-weight-normal';
@@ -36,6 +38,24 @@ export class IVooxChannel extends Channel {
 
     private channelUrl? : string;
     private numChapters:number = 0;
+
+    private static async initializeCache(): Promise<void> {
+        if (IVooxChannel.cacheInitialized) {
+            return;
+        }
+
+        const cacheType = process.env.CACHE_TYPE || 'memory';
+        
+        if (cacheType === 'redis') {
+            console.info('Initializing Redis cache...');
+            IVooxChannel.chapterCache = await RedisChapterCache.create();
+        } else {
+            console.info('Initializing in-memory cache...');
+            IVooxChannel.chapterCache = new InMemoryChapterCache();
+        }
+        
+        IVooxChannel.cacheInitialized = true;
+    }
 
     constructor(channelName: string) {
         super(channelName);
@@ -81,6 +101,8 @@ export class IVooxChannel extends Channel {
     }
 
     protected async fetchEpisodeList(): Promise<Chapter[]> {
+        await IVooxChannel.initializeCache();
+        
         const startTime = performance.now();
         console.log(`Chapters: ${this.numChapters}`);
 
@@ -193,7 +215,7 @@ export class IVooxChannel extends Channel {
     private async fetchChapterData(title: string, url: string): Promise<Chapter> {
         const cacheKey = ChapterCacheKey.fromUrl(url);
         
-        const cachedChapter = IVooxChannel.chapterCache.get(cacheKey);
+        const cachedChapter = await IVooxChannel.chapterCache.get(cacheKey);
         if (cachedChapter) {
             return cachedChapter;
         }

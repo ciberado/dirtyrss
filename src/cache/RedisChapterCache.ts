@@ -1,8 +1,8 @@
 import { Chapter } from '../models/Chapter.js';
 import { IChapterCache } from './IChapterCache.js';
+import { createClient } from 'redis';
 
-/*
-import { createClient, RedisClientType } from 'redis';
+type RedisClientType = ReturnType<typeof createClient>;
 
 interface ChapterData {
     id: string;
@@ -23,6 +23,21 @@ export class RedisChapterCache implements IChapterCache {
         this.client = client;
         this.prefix = prefix;
         this.ttl = ttl;
+    }
+
+    static async create(prefix: string = 'chapter:', ttl: number = 86400): Promise<RedisChapterCache> {
+        const [host, port] = (process.env.REDIS_ADDRESS || 'localhost:6379').split(':');
+        
+        const client = createClient({
+            socket: {
+                host: host,
+                port: parseInt(port)
+            }
+        });
+
+        await client.connect();
+        
+        return new RedisChapterCache(client, prefix, ttl);
     }
 
     async get(key: string): Promise<Chapter | undefined> {
@@ -72,7 +87,8 @@ export class RedisChapterCache implements IChapterCache {
             await this.client.del(keys);
         }
     }
-}
-*/
 
-export {};
+    async disconnect(): Promise<void> {
+        await this.client.quit();
+    }
+}

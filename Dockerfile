@@ -21,6 +21,8 @@ COPY --from=builder /app/assets ./assets
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 
+RUN mkdir -p /tmp/public && chown -R node:node /tmp/public
+
 USER node
 
 EXPOSE 3000
