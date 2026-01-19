@@ -83,16 +83,34 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId.mp3', async 
         }
         
         const stat = fs.statSync(fileName);
-        const filename = path.basename(fileName);
-        console.info("File size from stat:", stat.size);
+        const fileSize = stat.size;
+        const range = req.headers.range;
         
-        reply
-            .header('Content-Type', 'audio/mpeg')
-            .header('Content-Length', stat.size)
-            .header('Content-Disposition', `attachment; filename="${req.params.episodeId}.mp3"`);
-        
-        const stream = fs.createReadStream(fileName);
-        return reply.send(stream);
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunkSize = (end - start) + 1;
+            const stream = fs.createReadStream(fileName, { start, end });
+            
+            reply
+                .code(206)
+                .header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+                .header('Accept-Ranges', 'bytes')
+                .header('Content-Length', chunkSize)
+                .header('Content-Type', 'audio/mpeg');
+            
+            return reply.send(stream);
+        } else {
+            reply
+                .header('Content-Type', 'audio/mpeg')
+                .header('Content-Length', fileSize)
+                .header('Accept-Ranges', 'bytes')
+                .header('Content-Disposition', `attachment; filename="${req.params.episodeId}.mp3"`);
+            
+            const stream = fs.createReadStream(fileName);
+            return reply.send(stream);
+        }
     } catch (err) {
         console.warn(err);
         reply.code(404).type('text/html').send(`Error downloading ${req.params.episodeId} of ${req.params.episodeId} (${err}).`);
