@@ -35,11 +35,13 @@ export class TwitchChannel extends Channel{
     
     chapterUrlPrefix: string;
     username: string;
+    staticFilesPath: string;
 
-    constructor(channelName: string, chapterUrlPrefix : string) {
+    constructor(channelName: string, chapterUrlPrefix : string, staticFilesPath: string = '/tmp/public') {
         super(channelName);
         this.chapterUrlPrefix = chapterUrlPrefix;
         this.username = channelName;
+        this.staticFilesPath = staticFilesPath;
     }
 
     protected async fetchChannelInformation(): Promise<void> {
@@ -85,7 +87,7 @@ export class TwitchChannel extends Channel{
                         
                         // Calculate file size: real if exists, estimated (5 hours @ 1MB/min) if not
                         let fileSize = 5 * 60 * 1024 * 1024; // 5 hours default
-                        const filePath = `${process.env.FASTIFY_STATIC || '/tmp/public'}/twitch/${tc.id}.mp3`;
+                        const filePath = `${this.staticFilesPath}/twitch/${tc.id}.mp3`;
                         try {
                             if (fs.existsSync(filePath)) {
                                 fileSize = fs.statSync(filePath).size;

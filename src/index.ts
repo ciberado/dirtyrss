@@ -57,7 +57,7 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId', async (req, reply) =>
         console.info(`[REQUEST] ${req.method} ${req.protocol}://${req.hostname}${portSuffix}${req.url}`);
         const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}${portSuffix}`;
         console.log("chapterUrlPrefix", chapterUrlPrefix);
-        const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix);
+        const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix, FASTIFY_STATIC);
         const xmlFeed = await tc.generateFeed();
         reply.send(xmlFeed);            
     } catch (err) {
@@ -73,7 +73,7 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId.mp3', async 
         const portSuffix = (port === 80 && req.protocol === 'http') || (port === 443 && req.protocol === 'https') ? '' : `:${port}`;
         console.info(`[REQUEST] ${req.method} ${req.protocol}://${req.hostname}${portSuffix}${req.url}`);
         const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}${portSuffix}`;
-        const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix);
+        const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix, FASTIFY_STATIC);
         const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, req.params.episodeId);
         console.info("File name", fileName);
         
