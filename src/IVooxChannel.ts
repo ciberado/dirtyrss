@@ -5,6 +5,7 @@ import { Chapter } from './Chapter.js';
 import { Channel } from './Channel.js';
 import NodeCache from 'node-cache';
 import { performance } from 'perf_hooks';
+import { createHash } from 'crypto';
 
 export class IVooxChannel extends Channel {
 
@@ -192,7 +193,7 @@ export class IVooxChannel extends Channel {
     }
 
     private async fetchChapterData(title: string, url: string): Promise<Chapter> {
-        const cacheKey = `chapter_${url}`;
+        const cacheKey = createHash('md5').update(url).digest('hex');
         
         const cachedChapter =   IVooxChannel.chapterCache.get<Chapter>(cacheKey);
         if (cachedChapter) {
