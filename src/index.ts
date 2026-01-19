@@ -15,7 +15,9 @@ const ASSETS_DIRECTORY = `${path.resolve('.')}/assets/`;
 
 fse.copySync(ASSETS_DIRECTORY, FASTIFY_STATIC);
 
-const fastify = Fastify();
+const fastify = Fastify({
+    trustProxy: true
+});
 
 if (fs.existsSync(FASTIFY_STATIC) === false) {
     fs.mkdirSync(FASTIFY_STATIC, { recursive : true});
