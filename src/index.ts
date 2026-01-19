@@ -49,7 +49,10 @@ interface TwitchParamType {
 
 fastify.get<{Params : TwitchParamType}>('/twitch/:showId', async (req, reply) => {
     try {
-        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}:${req.port}`;
+        const defaultPort = req.protocol === 'https' ? 443 : 80;
+        const port = req.port || defaultPort;
+        const portSuffix = (port === 80 && req.protocol === 'http') || (port === 443 && req.protocol === 'https') ? '' : `:${port}`;
+        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}${portSuffix}`;
         const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix);
         const xmlFeed = await tc.generateFeed();
         reply.send(xmlFeed);            
@@ -61,7 +64,10 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId', async (req, reply) =>
 
 fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId', async (req, reply) => {
     try {
-        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}:${req.port}`;
+        const defaultPort = req.protocol === 'https' ? 443 : 80;
+        const port = req.port || defaultPort;
+        const portSuffix = (port === 80 && req.protocol === 'http') || (port === 443 && req.protocol === 'https') ? '' : `:${port}`;
+        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}${portSuffix}`;
         const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix);
         const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, req.params.episodeId);
         console.info("File name", fileName);

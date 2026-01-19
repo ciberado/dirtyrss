@@ -29,20 +29,4 @@ compose-restart:
 compose-clean:
 	docker compose --profile redis down -v
 
-docker-install:
-	docker container create --name dirtyrss --pull never -l com.centurylinklabs.watchtower.enable=false -l wud.watch=false --restart always --publish 3000:3000 ciberado/dirtyrss
-
-docker-log:
-	docker logs -f dirtyrss
-
-docker-run:
-	docker start dirtyrss 
-
-docker-clean:
-	docker rm -f dirtyrss 2>/dev/null || true
-	docker rmi ciberado/dirtyrss 2>/dev/null || true
-
-docker-build:
-	docker build . -t ciberado/dirtyrss
-
 all: compose-clean compose-build compose-up-redis
