@@ -81,7 +81,7 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId', async (req
         console.info("File size from stat:", stat.size);
         
         reply.raw.writeHead(200, {
-            'Content-Type': 'audio/aac',
+            'Content-Type': 'audio/mp3',
             'Content-Length': stat.size
         });
         
