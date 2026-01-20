@@ -2,10 +2,9 @@ import * as cheerio from "cheerio";
 import { default as got } from 'got';
 import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
-
+import { ChapterCacheKey } from '../cache/IChapterCache.js';
 
 export class LavanguardiaChannel extends Channel {
-    static cache = new Map<string, Chapter>();
 
     protected channelUrl: string;
 
@@ -29,7 +28,14 @@ export class LavanguardiaChannel extends Channel {
         this.link = this.channelUrl;
     }
 
-    private async fetchChapterData(fileUrl: string): Promise<Chapter> {
+    protected async fetchChapterData(fileUrl: string): Promise<Chapter> {
+        const cacheKey = ChapterCacheKey.fromUrl(fileUrl);
+        
+        const cachedChapter = await Channel.chapterCache.get(cacheKey);
+        if (cachedChapter) {
+            return cachedChapter;
+        }
+
         const chapterResponsePage = await got(fileUrl);
         const chapterPageHtml = chapterResponsePage.body;
         const $ = cheerio.load(chapterPageHtml);
@@ -44,6 +50,9 @@ export class LavanguardiaChannel extends Channel {
         const duration = '';
 
         const chapter = new Chapter(id, title, fileUrl, description, new Date(date), image, duration);
+        
+        Channel.chapterCache.set(cacheKey, chapter);
+        
         return chapter;
     }
 
@@ -56,11 +65,7 @@ export class LavanguardiaChannel extends Channel {
             const $article = $($articles[index]);
             const fileUrl = 'https://www.lavanguardia.com' + $article.find('a.page-link').attr('href')!.trim();
 
-            let chapter  =  LavanguardiaChannel.cache.get(fileUrl);
-            if (!chapter) {
-                chapter = await this.fetchChapterData(fileUrl);
-                LavanguardiaChannel.cache.set(fileUrl, chapter);
-            }
+            const chapter = await this.fetchChapterData(fileUrl);
             chapters.push(chapter);
         }
 

@@ -1,9 +1,15 @@
 import { Podcast } from 'podcast';
 import { Chapter } from '../models/Chapter.js';
 import { performance } from 'perf_hooks';
+import { IChapterCache } from '../cache/IChapterCache.js';
+import { InMemoryChapterCache } from '../cache/InMemoryChapterCache.js';
+import { RedisChapterCache } from '../cache/RedisChapterCache.js';
 
 export abstract class Channel {
     
+    protected static chapterCache: IChapterCache;
+    protected static cacheInitialized: boolean = false;
+
     protected channelName: string;
     protected description?: string;
     protected feedUrl?: string;
@@ -17,12 +23,34 @@ export abstract class Channel {
         this.channelName = channelName;
     }
 
+    protected static async initializeCache(): Promise<void> {
+        if (Channel.cacheInitialized) {
+            return;
+        }
+
+        const cacheType = process.env.CACHE_TYPE || 'memory';
+        
+        if (cacheType === 'redis') {
+            console.info('Initializing Redis cache...');
+            Channel.chapterCache = await RedisChapterCache.create();
+        } else {
+            console.info('Initializing in-memory cache...');
+            Channel.chapterCache = new InMemoryChapterCache();
+        }
+        
+        Channel.cacheInitialized = true;
+    }
+
     protected abstract fetchChannelInformation() : Promise<void>;
     
     protected abstract fetchEpisodeList() : Promise<Chapter[]>;
 
+    protected abstract fetchChapterData(identifier: string): Promise<Chapter>;
+
     public async generateFeed(): Promise<string | undefined> {
         console.info(`Creating rss feed.`);
+
+        await Channel.initializeCache();
 
         console.debug(`Getting channel information.`);
         await this.fetchChannelInformation();
@@ -67,4 +95,3 @@ export abstract class Channel {
         return feed.buildXml();
     }
 }
-//# sourceMappingURL=Channel.js.map

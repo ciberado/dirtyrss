@@ -10,6 +10,10 @@ export interface IChapterCache {
 
 export class ChapterCacheKey {
     static fromUrl(url: string): string {
-        return createHash('md5').update(url).digest('hex');
+        return createHash('md5').update(`url:${url}`).digest('hex');
+    }
+    
+    static fromId(source: string, id: string): string {
+        return createHash('md5').update(`${source}:${id}`).digest('hex');
     }
 }

@@ -10,6 +10,7 @@ import {PythonShell} from 'python-shell';
 
 import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
+import { ChapterCacheKey } from '../cache/IChapterCache.js';
 
 interface TwitchVideoData {
     id: string;
@@ -32,6 +33,8 @@ export class TwitchChannel extends Channel{
 
     static twitchDlPath : string;
     static downloadingEpisodes : { [key: string]: boolean; } = {};
+    
+    private allVideosData: TwitchVideoData[] | null = null;
     
     chapterUrlPrefix: string;
     username: string;
@@ -60,7 +63,11 @@ export class TwitchChannel extends Channel{
         this.link = programUrl;  
     }
 
-    protected async fetchEpisodeList() : Promise<Chapter[]> {
+    private async fetchAllVideosData(): Promise<TwitchVideoData[]> {
+        if (this.allVideosData !== null) {
+            return this.allVideosData;
+        }
+
         return new Promise(async (resolve, reject) => {
             console.log(`Retrieving list of episodes for channel ${this.channelName}.`);
             const opt = {
@@ -69,41 +76,80 @@ export class TwitchChannel extends Channel{
                 pythonOptions: [], 
                 scriptPath: path.dirname(TwitchChannel.twitchDlPath),
                 args: ['videos', this.username, '--json']
-              };
+            };
 
             PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, (err, results : unknown) => {
-                if (err) reject(err);
+                if (err) {
+                    reject(err);
+                    return;
+                }
                 console.log('List of episodes retrieved.');
                 const twitchChapters = results as TwitchChannelData[];
-                const chapters = !twitchChapters ? [] :
-                    twitchChapters[0].videos.map(tc => {
-                        let duration = '';
-                        if (tc.lengthSeconds) {
-                            const hours = Math.floor(tc.lengthSeconds / 3600);
-                            const minutes = Math.floor((tc.lengthSeconds % 3600) / 60);
-                            const seconds = tc.lengthSeconds % 60;
-                            duration = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                        }
-                        
-                        // Calculate file size: real if exists, estimated (5 hours @ 1MB/min) if not
-                        let fileSize = 5 * 60 * 1024 * 1024; // 5 hours default
-                        const filePath = `${this.staticFilesPath}/twitch/${tc.id}.mp3`;
-                        try {
-                            if (fs.existsSync(filePath)) {
-                                fileSize = fs.statSync(filePath).size;
-                            }
-                        } catch (err) {
-                            // Use default size
-                        }
-                        
-                        return new Chapter(
-                            tc.id, tc.title, `${this.chapterUrlPrefix}/twitch/${this.username}/${tc.id}.mp3`, tc.title, new Date(tc.publishedAt), '', duration, 'audio/mpeg', fileSize
-                        );
-                    });
-                resolve(chapters);
+                const videos = !twitchChapters ? [] : twitchChapters[0].videos;
+                this.allVideosData = videos;
+                resolve(videos);
             });
-    
         });
+    }
+
+    protected async fetchChapterData(id: string): Promise<Chapter> {
+        const cacheKey = ChapterCacheKey.fromId('twitch', id);
+        
+        const cachedChapter = await Channel.chapterCache.get(cacheKey);
+        if (cachedChapter) {
+            return cachedChapter;
+        }
+
+        const videos = await this.fetchAllVideosData();
+        const tc = videos.find(v => v.id === id);
+        
+        if (!tc) {
+            throw new Error(`Video ${id} not found for channel ${this.channelName}`);
+        }
+
+        let duration = '';
+        if (tc.lengthSeconds) {
+            const hours = Math.floor(tc.lengthSeconds / 3600);
+            const minutes = Math.floor((tc.lengthSeconds % 3600) / 60);
+            const seconds = tc.lengthSeconds % 60;
+            duration = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        let fileSize = 5 * 60 * 1024 * 1024;
+        const filePath = `${this.staticFilesPath}/twitch/${tc.id}.mp3`;
+        try {
+            if (fs.existsSync(filePath)) {
+                fileSize = fs.statSync(filePath).size;
+            }
+        } catch (err) {
+            // Use default size
+        }
+        
+        const chapter = new Chapter(
+            tc.id, 
+            tc.title, 
+            `${this.chapterUrlPrefix}/twitch/${this.username}/${tc.id}.mp3`, 
+            tc.title, 
+            new Date(tc.publishedAt), 
+            '', 
+            duration, 
+            'audio/mpeg', 
+            fileSize
+        );
+
+        Channel.chapterCache.set(cacheKey, chapter);
+        
+        return chapter;
+    }
+
+    protected async fetchEpisodeList() : Promise<Chapter[]> {
+        const videos = await this.fetchAllVideosData();
+        
+        const chapters = await Promise.all(
+            videos.map(tc => this.fetchChapterData(tc.id))
+        );
+        
+        return chapters;
     }
 
     private async downloadEpisode(episodeId : string, fileName: string) {

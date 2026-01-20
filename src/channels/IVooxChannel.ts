@@ -4,14 +4,9 @@ import { default as got } from 'got';
 import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
 import { performance } from 'perf_hooks';
-import { IChapterCache, ChapterCacheKey } from '../cache/IChapterCache.js';
-import { InMemoryChapterCache } from '../cache/InMemoryChapterCache.js';
-import { RedisChapterCache } from '../cache/RedisChapterCache.js';
+import { ChapterCacheKey } from '../cache/IChapterCache.js';
 
 export class IVooxChannel extends Channel {
-    
-    private static chapterCache: IChapterCache;
-    private static cacheInitialized: boolean = false;
 
 
     private static readonly EPISODE_NAME_SELECTOR:string = 'h1';
@@ -39,24 +34,6 @@ export class IVooxChannel extends Channel {
 
     private channelUrl? : string;
     private numChapters:number = 0;
-
-    private static async initializeCache(): Promise<void> {
-        if (IVooxChannel.cacheInitialized) {
-            return;
-        }
-
-        const cacheType = process.env.CACHE_TYPE || 'memory';
-        
-        if (cacheType === 'redis') {
-            console.info('Initializing Redis cache...');
-            IVooxChannel.chapterCache = await RedisChapterCache.create();
-        } else {
-            console.info('Initializing in-memory cache...');
-            IVooxChannel.chapterCache = new InMemoryChapterCache();
-        }
-        
-        IVooxChannel.cacheInitialized = true;
-    }
 
     constructor(channelName: string) {
         super(channelName);
@@ -102,8 +79,6 @@ export class IVooxChannel extends Channel {
     }
 
     protected async fetchEpisodeList(): Promise<Chapter[]> {
-        await IVooxChannel.initializeCache();
-        
         const startTime = performance.now();
         console.log(`Chapters: ${this.numChapters}`);
 
@@ -213,10 +188,10 @@ export class IVooxChannel extends Channel {
         return chapters;
     }
 
-    private async fetchChapterData(url: string): Promise<Chapter> {
+    protected async fetchChapterData(url: string): Promise<Chapter> {
         const cacheKey = ChapterCacheKey.fromUrl(url);
         
-        const cachedChapter = await IVooxChannel.chapterCache.get(cacheKey);
+        const cachedChapter = await Channel.chapterCache.get(cacheKey);
         if (cachedChapter) {
             return cachedChapter;
         }
@@ -267,7 +242,7 @@ export class IVooxChannel extends Channel {
         const chapter = new Chapter(id, title, audioRealUrl, description, date, img, duration);
         console.debug(`    ++Podcast "${this.channelName}" chapter "${title}", url=(${url}).`);
         
-        IVooxChannel.chapterCache.set(cacheKey, chapter);
+        Channel.chapterCache.set(cacheKey, chapter);
 
         return chapter;
     }
@@ -315,9 +290,5 @@ export class IVooxChannel extends Channel {
         concurrency: IVooxChannel.IVOOX_MAX_REQUESTS_PER_SECOND*1.2,
         maxDelay: 5 * 60000
     });
-    
-    public static setChapterCache(cache: IChapterCache): void {
-        IVooxChannel.chapterCache = cache;
-    }
 }
 //# sourceMappingURL=IVooxChannel.js.map
