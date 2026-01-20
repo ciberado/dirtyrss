@@ -29,7 +29,7 @@ export class LavanguardiaChannel extends Channel {
         this.link = this.channelUrl;
     }
 
-    private async fetchChapter(fileUrl: string): Promise<Chapter> {
+    private async fetchChapterData(fileUrl: string): Promise<Chapter> {
         const chapterResponsePage = await got(fileUrl);
         const chapterPageHtml = chapterResponsePage.body;
         const $ = cheerio.load(chapterPageHtml);
@@ -58,7 +58,7 @@ export class LavanguardiaChannel extends Channel {
 
             let chapter  =  LavanguardiaChannel.cache.get(fileUrl);
             if (!chapter) {
-                chapter = await this.fetchChapter(fileUrl);
+                chapter = await this.fetchChapterData(fileUrl);
                 LavanguardiaChannel.cache.set(fileUrl, chapter);
             }
             chapters.push(chapter);

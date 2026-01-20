@@ -14,6 +14,7 @@ export class IVooxChannel extends Channel {
     private static cacheInitialized: boolean = false;
 
 
+    private static readonly EPISODE_NAME_SELECTOR:string = 'h1';
     private static readonly PODCAST_AUTHOR_SELECTOR:string = 'a.text-black.font-weight-normal';
     private static readonly PODCAST_DESCRIPTION_SELECTOR:string = '.d-flex > .d-none > .text-truncate-3';
     private static readonly PODCAST_IMAGE_SELECTOR:string = '.image-wrapper img';
@@ -207,12 +208,12 @@ export class IVooxChannel extends Channel {
         }
         
         const chapters = await Promise.all(
-            episodesData.map(ep => this.fetchChapterData(ep.title, ep.url))
+            episodesData.map(ep => this.fetchChapterData(ep.url))
         );
         return chapters;
     }
 
-    private async fetchChapterData(title: string, url: string): Promise<Chapter> {
+    private async fetchChapterData(url: string): Promise<Chapter> {
         const cacheKey = ChapterCacheKey.fromUrl(url);
         
         const cachedChapter = await IVooxChannel.chapterCache.get(cacheKey);
@@ -221,7 +222,6 @@ export class IVooxChannel extends Channel {
         }
         
         const chapterHtml = (await IVooxChannel.limit(async () => await this.requestIvoox(url))).body;
-        console.debug(`    ++Podcast "${this.channelName}" chapter "${title}", url=(${url}).`);
 
         const audioUrlTempl = "https://www.ivoox.com/listenembeded_mn_12345678_1.mp3?source=EMBEDEDHTML5";
 
@@ -229,6 +229,7 @@ export class IVooxChannel extends Channel {
         const id = matches.pop()!;
         const audioRealUrl = audioUrlTempl.replace('12345678', id);
 
+        let title : string;
         let description: string;
         let date: Date;
         let duration: string;
@@ -236,6 +237,7 @@ export class IVooxChannel extends Channel {
         {
             const $chapterPage = cheerio.load(chapterHtml);
 
+            title = $chapterPage(IVooxChannel.EPISODE_NAME_SELECTOR).text().trim();
             description = $chapterPage(IVooxChannel.EPISODE_DESCRIPTION_SELECTOR).text().trim();
 
             date = this.fromSpanishDate('01/01/2000');
@@ -263,6 +265,7 @@ export class IVooxChannel extends Channel {
         }
 
         const chapter = new Chapter(id, title, audioRealUrl, description, date, img, duration);
+        console.debug(`    ++Podcast "${this.channelName}" chapter "${title}", url=(${url}).`);
         
         IVooxChannel.chapterCache.set(cacheKey, chapter);
 
