@@ -23,8 +23,9 @@ const fastify = Fastify({
 fastify.addHook('onResponse', (req, reply, done) => {
     const used = process.memoryUsage();
     const rssMB = Math.round(used.rss / 1024 / 1024);
+    const clientIp = req.ip;
     
-    console.log(`[MEMORY] ${rssMB}MB | ${req.method} ${req.url} - ${reply.statusCode}`);
+    console.log(`[MEMORY] ${rssMB}MB | ${clientIp} | ${req.method} ${req.url} - ${reply.statusCode}`);
     done();
 });
 
