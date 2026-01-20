@@ -27,4 +27,4 @@ USER node
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+CMD ["node", "--max-old-space-size=512", "dist/index.js"]
