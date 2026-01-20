@@ -59,9 +59,43 @@ npm run start
 
 Nota: Probablemente no querrás utilizar el puerto 80 a menos que tu red sea de confianza.
 
+### Ejecución rápida con imagen publicada
+
 ```bash
 docker run -p 80:3000 ciberado/dirtyrss
 ```
+
+### Ejecución con Docker Compose (recomendado)
+
+```bash
+# Construir y arrancar (sin Redis)
+make compose-build
+make compose-up
+
+# O construir y arrancar con Redis (caché persistente)
+make all
+
+# Ver logs
+make compose-logs
+
+# Detener
+make compose-down
+
+# Limpiar volúmenes y contenedores
+make compose-clean
+```
+
+### Comandos disponibles en Makefile
+
+- `make compose-build` - Construir la imagen
+- `make compose-up` - Arrancar sin Redis
+- `make compose-up-redis` - Arrancar con Redis
+- `make compose-down` - Detener contenedores
+- `make compose-logs` - Ver logs en tiempo real
+- `make compose-restart` - Reiniciar contenedores
+- `make compose-clean` - Detener y eliminar volúmenes
+- `make compose-remove-volumes` - Limpieza profunda de volúmenes
+- `make all` - Limpiar, construir y arrancar con Redis
 
 ## Obteniendo feeds
 

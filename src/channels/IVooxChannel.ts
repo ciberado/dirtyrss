@@ -1,4 +1,4 @@
-import * as cheerio from "cheerio"; 
+import * as cheerio from "cheerio";
 import { pRateLimit } from 'p-ratelimit';
 import { default as got } from 'got';
 import { Chapter } from '../models/Chapter.js';
@@ -21,7 +21,7 @@ export class IVooxChannel extends Channel {
     private static readonly EPISODE_SELECTOR:string = '.d-flex > .d-flex > h3 > a';
     private static readonly EPISODE_IMAGE_SELECTOR:string = '.image-wrapper.pr-2 > picture > img';
 
-    private static readonly IVOOX_FETCH_TIMEOUT_MS:number = parseInt(process.env.IVOOX_FETCH_TIMEOUT_MS ?? "10000");
+    private static readonly IVOOX_FETCH_TIMEOUT_MS:number = parseInt(process.env.IVOOX_FETCH_TIMEOUT_MS ?? "8000");
     private static readonly IVOOX_FETCH_PAGES_BATCH_SIZE:number = parseInt(process.env.IVOOX_FETCH_PAGES_BATCH_SIZE ?? "5");
     private static readonly IVOOX_MAX_REQUESTS_PER_SECOND:number = parseInt(process.env.IVOOX_MAX_CALLS_PER_SECOND ?? "90");
     private static readonly IVOOX_CHAPTERS_PER_PAGE:number = parseInt(process.env.IVOOX_CHAPTERS_PER_PAGE ?? "20");
@@ -48,33 +48,44 @@ export class IVooxChannel extends Channel {
         return new Date(year, month, day);
     }
 
+    /**
+     * Helper para cargar y parsear HTML con Cheerio, liberando memoria después de extraer datos
+     * Limita el scope del DOM cargado para ayudar al Garbage Collector
+     * @param html HTML string a parsear
+     * @param extractor Función que extrae los datos necesarios del DOM
+     * @returns Los datos extraídos
+     */
+    private parseAndExtract<T>(html: string, extractor: ($: cheerio.Root) => T): T {
+        const $ = cheerio.load(html);
+        const result = extractor($);
+        // El DOM de Cheerio sale de scope aquí, ayudando al GC a liberar memoria
+        return result;
+    }
+
     protected async fetchChannelInformation(): Promise<void> {
         console.info(`Configuring feed from ${this.channelUrl}`);
         const channelHtml = (await this.requestIvoox(this.channelUrl || '')).body;
         
-        let imageUrl: string | undefined;
-        let numChapters: number;
-        {
-            const $channelPage = cheerio.load(channelHtml);
-
-            this.channelName = $channelPage('h1').text().trim();
-            this.author = $channelPage(IVooxChannel.PODCAST_AUTHOR_SELECTOR).text().trim();
-            this.description = $channelPage(IVooxChannel.PODCAST_DESCRIPTION_SELECTOR).text().trim();
-            imageUrl = $channelPage(IVooxChannel.PODCAST_IMAGE_SELECTOR).attr('src')?.trim();
-            if (!imageUrl || imageUrl.length === 0) {
-                imageUrl = $channelPage(IVooxChannel.PODCAST_IMAGE2_SELECTOR).attr('data-lazy-src')?.trim();
-            }
-            numChapters = parseInt($channelPage(IVooxChannel.PODCAST_NUM_CHAPTERS_SELECTOR).text().replace('.','').trim());
-        }
+        const { channelName, author, description, imageUrl, numChapters } = this.parseAndExtract(channelHtml, ($) => {
+            const rawImageUrl = $(IVooxChannel.PODCAST_IMAGE_SELECTOR).attr('src')?.trim() || 
+                               $(IVooxChannel.PODCAST_IMAGE2_SELECTOR).attr('data-lazy-src')?.trim();
+            
+            return {
+                channelName: $('h1').text().trim(),
+                author: $(IVooxChannel.PODCAST_AUTHOR_SELECTOR).text().trim(),
+                description: $(IVooxChannel.PODCAST_DESCRIPTION_SELECTOR).text().trim(),
+                imageUrl: rawImageUrl,
+                numChapters: parseInt($(IVooxChannel.PODCAST_NUM_CHAPTERS_SELECTOR).text().replace('.','').trim())
+            };
+        });
         
-        if (imageUrl && imageUrl.includes('url=')) {
-            imageUrl = imageUrl.split('url=')[1];
-        }
-        this.imageUrl = imageUrl || '';
-        
+        this.channelName = channelName;
+        this.author = author;
+        this.description = description;
+        this.imageUrl = imageUrl && imageUrl.includes('url=') ? imageUrl.split('url=')[1] : (imageUrl || '');
+        this.numChapters = numChapters;
         this.ttlInMinutes = 60;
         this.siteUrl = this.channelUrl;
-        this.numChapters = numChapters;
         this.link = this.channelUrl;
     }
 
@@ -172,15 +183,15 @@ export class IVooxChannel extends Channel {
             }
 
             const pageHtml = (await IVooxChannel.limit(async () => await this.requestIvoox(firstPageUrl))).body || '';
-            const $channelPage = cheerio.load(pageHtml);
-            const firstEpisode = $channelPage(IVooxChannel.EPISODE_SELECTOR).first();
             
-            if (firstEpisode.length > 0) {
-                const href = firstEpisode.attr('href');
-                if (href) {
-                    const episodeUrl = `https://ivoox.com${href}`;
-                    return await this.fetchChapterData(episodeUrl);
-                }
+            const firstEpisodeHref = this.parseAndExtract(pageHtml, ($) => {
+                const firstEpisode = $(IVooxChannel.EPISODE_SELECTOR).first();
+                return firstEpisode.length > 0 ? firstEpisode.attr('href') : undefined;
+            });
+            
+            if (firstEpisodeHref) {
+                const episodeUrl = `https://ivoox.com${firstEpisodeHref}`;
+                return await this.fetchChapterData(episodeUrl);
             }
             
             return undefined;
@@ -235,21 +246,22 @@ export class IVooxChannel extends Channel {
 
         const pageHtml = (await IVooxChannel.limit(async () => await this.requestIvoox(currentPageUrl || ''))).body || '';
         
-        const episodesData: Array<{title: string, url: string}> = [];
-        {
-            const $channelPage = cheerio.load(pageHtml);
-            const episodeElements = $channelPage(IVooxChannel.EPISODE_SELECTOR).toArray();
+        const episodesData = this.parseAndExtract(pageHtml, ($) => {
+            const episodeElements = $(IVooxChannel.EPISODE_SELECTOR).toArray();
+            const episodes: Array<{title: string, url: string}> = [];
             
             for (const element of episodeElements) {
-                if (element) {
-                    const $elem = $channelPage(element);
-                    episodesData.push({
+                const $elem = $(element);
+                const href = $elem.attr('href');
+                if (href) {
+                    episodes.push({
                         title: $elem.text().trim(),
-                        url: `https://ivoox.com${$elem.attr('href')}` || ''
+                        url: `https://ivoox.com${href}`
                     });
                 }
             }
-        }
+            return episodes;
+        });
         
         const chapters = await Promise.all(
             episodesData.map(ep => this.fetchChapterData(ep.url))
@@ -267,48 +279,36 @@ export class IVooxChannel extends Channel {
         
         const chapterHtml = (await IVooxChannel.limit(async () => await this.requestIvoox(url))).body;
 
-        const audioUrlTempl = "https://www.ivoox.com/listenembeded_mn_12345678_1.mp3?source=EMBEDEDHTML5";
-
         const matches = url.match(/\d{6,12}/g) || [];
         const id = matches.pop()!;
-        const audioRealUrl = audioUrlTempl.replace('12345678', id);
+        const audioRealUrl = `https://www.ivoox.com/listenembeded_mn_${id}_1.mp3?source=EMBEDEDHTML5`;
 
-        let title : string;
-        let description: string;
-        let date: Date;
-        let duration: string;
-        let img: string;
-        {
-            const $chapterPage = cheerio.load(chapterHtml);
-
-            title = $chapterPage(IVooxChannel.EPISODE_NAME_SELECTOR).text().trim();
-            description = $chapterPage(IVooxChannel.EPISODE_DESCRIPTION_SELECTOR).text().trim();
-
-            date = this.fromSpanishDate('01/01/2000');
-            try {
-                date = this.fromSpanishDate($chapterPage(IVooxChannel.EPISODE_DATE_AND_DURATION_SELECTOR).text().split('·')[0].trim() || '01/01/2000');
-            } catch (error) {  
-                console.error(`Error fetching date for chapter ${title}:`, error);
-            }
+        const { title, description, dateText, duration, img } = this.parseAndExtract(chapterHtml, ($) => {
+            const dateAndDurationText = $(IVooxChannel.EPISODE_DATE_AND_DURATION_SELECTOR).text();
+            const parts = dateAndDurationText.split('·');
             
-            duration = '00:00';
-            try {
-                duration = $chapterPage(IVooxChannel.EPISODE_DATE_AND_DURATION_SELECTOR).text().split('·')[1].trim() || '00:00';
-            } catch (error) {
-                console.error(`Error fetching duration for chapter ${title}:`, error);
-            }
+            const rawImg = $(IVooxChannel.EPISODE_IMAGE_SELECTOR).attr('src')?.trim() || 
+                          $(IVooxChannel.EPISODE_IMAGE_SELECTOR).attr('data-lazy-src')?.trim() || '';
+            
+            return {
+                title: $(IVooxChannel.EPISODE_NAME_SELECTOR).text().trim(),
+                description: $(IVooxChannel.EPISODE_DESCRIPTION_SELECTOR).text().trim(),
+                dateText: parts[0]?.trim() || '01/01/2000',
+                duration: parts[1]?.trim() || '00:00',
+                img: rawImg
+            };
+        });
 
-            img = ($chapterPage(IVooxChannel.EPISODE_IMAGE_SELECTOR).attr('src') || '').trim();
-            if(img === '') {
-                img = ($chapterPage(IVooxChannel.EPISODE_IMAGE_SELECTOR).attr('data-lazy-src') || '').trim();
-            }
+        let date = this.fromSpanishDate('01/01/2000');
+        try {
+            date = this.fromSpanishDate(dateText);
+        } catch (error) {  
+            console.error(`Error parsing date "${dateText}" for chapter ${title}:`, error);
         }
         
-        if (img.includes('url=')) {
-            img = img.split('url=')[1];
-        }
+        const finalImg = img.includes('url=') ? img.split('url=')[1] : img;
 
-        const chapter = new Chapter(id, title, audioRealUrl, description, date, img, duration);
+        const chapter = new Chapter(id, title, audioRealUrl, description, date, finalImg, duration);
         console.debug(`    ++Podcast "${this.channelName}" chapter "${title}", url=(${url}).`);
         
         Channel.chapterCache.set(cacheKey, chapter);
@@ -324,13 +324,10 @@ export class IVooxChannel extends Channel {
 
         console.debug(`Looking for the program url.`);
         
-        let programUrl: string | undefined;
-        {
-            const $ = cheerio.load(searchHtml);
+        const programUrl = this.parseAndExtract(searchHtml, ($) => {
             const selector = `.modulo-type-programa .header-modulo a`;
-            const anchor = $(selector);
-            programUrl = anchor.attr('href')?.toString();
-        }
+            return $(selector).attr('href')?.toString();
+        });
         
         console.debug(`Program url: ${programUrl}.`);
 

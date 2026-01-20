@@ -27,7 +27,7 @@ compose-restart:
 	docker compose restart
 
 compose-clean:
-	docker compose --profile redis down -v
+	docker compose --profile redis down
 
 compose-remove-volumes:
 	docker compose --profile redis down -v

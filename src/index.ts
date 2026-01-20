@@ -19,12 +19,45 @@ const fastify = Fastify({
     trustProxy: true
 });
 
+// Memory monitoring hook
+fastify.addHook('onResponse', (req, reply, done) => {
+    const used = process.memoryUsage();
+    const rssMB = Math.round(used.rss / 1024 / 1024);
+    
+    console.log(`[MEMORY] ${rssMB}MB | ${req.method} ${req.url} - ${reply.statusCode}`);
+    done();
+});
+
 if (fs.existsSync(FASTIFY_STATIC) === false) {
     fs.mkdirSync(FASTIFY_STATIC, { recursive : true});
 }
 fastify.register(fastifyStatic, {
     root : FASTIFY_STATIC,
     acceptRanges : true
+});
+
+// Health check and memory monitoring endpoint
+fastify.get('/health', async (req, reply) => {
+    const used = process.memoryUsage();
+    
+    reply.send({
+        status: 'ok',
+        uptime: process.uptime(),
+        memory: {
+            heapUsed: `${Math.round(used.heapUsed / 1024 / 1024)}MB`,
+            heapTotal: `${Math.round(used.heapTotal / 1024 / 1024)}MB`,
+            external: `${Math.round(used.external / 1024 / 1024)}MB`,
+            rss: `${Math.round(used.rss / 1024 / 1024)}MB`,
+            arrayBuffers: `${Math.round(used.arrayBuffers / 1024 / 1024)}MB`
+        },
+        memoryRaw: {
+            heapUsed: used.heapUsed,
+            heapTotal: used.heapTotal,
+            external: used.external,
+            rss: used.rss,
+            arrayBuffers: used.arrayBuffers
+        }
+    });
 });
 
 interface LavanguardiaParamType {
