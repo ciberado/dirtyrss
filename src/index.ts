@@ -23,7 +23,11 @@ const fastify = Fastify({
 fastify.addHook('onResponse', (req, reply, done) => {
     const used = process.memoryUsage();
     const rssMB = Math.round(used.rss / 1024 / 1024);
-    const clientIp = req.ip;
+    
+    // Cloudflare usa CF-Connecting-IP, sino X-Forwarded-For, sino req.ip
+    const clientIp = req.headers['cf-connecting-ip'] || 
+                     req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+                     req.ip;
     
     console.log(`[MEMORY] ${rssMB}MB | ${clientIp} | ${req.method} ${req.url} - ${reply.statusCode}`);
     done();
