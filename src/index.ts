@@ -25,8 +25,10 @@ fastify.addHook('onResponse', (req, reply, done) => {
     const rssMB = Math.round(used.rss / 1024 / 1024);
     
     // Cloudflare usa CF-Connecting-IP, sino X-Forwarded-For, sino req.ip
-    const clientIp = req.headers['cf-connecting-ip'] || 
-                     req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+    const cfIp = req.headers['cf-connecting-ip'];
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    const clientIp = cfIp || 
+                     (typeof xForwardedFor === 'string' ? xForwardedFor.split(',')[0].trim() : xForwardedFor?.[0]) || 
                      req.ip;
     
     console.log(`[MEMORY] ${rssMB}MB | ${clientIp} | ${req.method} ${req.url} - ${reply.statusCode}`);
