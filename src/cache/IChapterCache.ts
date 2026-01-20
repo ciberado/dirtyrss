@@ -21,9 +21,10 @@ export class ChapterCacheKey {
     }
     
     static forFeedCache(channelUrl: string, firstChapter: Chapter): string {
-        const chapterHash = createHash('md5').update(
-            `${firstChapter.id}:${firstChapter.title}:${firstChapter.date.getTime()}`
+        // Usar id, title y fileUrl para identificar el primer capítulo
+        // Son los campos realmente importantes y estables
+        return createHash('md5').update(
+            `feed:${channelUrl}:${firstChapter.id}:${firstChapter.title}:${firstChapter.fileUrl}`
         ).digest('hex');
-        return createHash('md5').update(`feed:${channelUrl}:${chapterHash}`).digest('hex');
     }
 }

@@ -93,9 +93,9 @@ make compose-clean
 - `make compose-down` - Detener contenedores
 - `make compose-logs` - Ver logs en tiempo real
 - `make compose-restart` - Reiniciar contenedores
-- `make compose-clean` - Detener y eliminar volúmenes
-- `make compose-remove-volumes` - Limpieza profunda de volúmenes
-- `make all` - Limpiar, construir y arrancar con Redis
+- `make compose-clean` - Detener contenedores (preserva volúmenes/caché)
+- `make compose-remove-volumes` - Detener y eliminar volúmenes (limpieza completa)
+- `make all` - Detener, construir y arrancar con Redis (preserva caché)
 
 ## Obteniendo feeds
 
