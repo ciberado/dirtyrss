@@ -12,6 +12,8 @@ interface ChapterData {
     dateTimestamp: number;
     image: string;
     duration: string;
+    mimeType: string;
+    length: number;
 }
 
 export class RedisChapterCache implements IChapterCache {
@@ -54,7 +56,9 @@ export class RedisChapterCache implements IChapterCache {
             parsed.description,
             new Date(parsed.dateTimestamp),
             parsed.image,
-            parsed.duration
+            parsed.duration,
+            parsed.mimeType,
+            parsed.length
         );
     }
 
@@ -66,7 +70,9 @@ export class RedisChapterCache implements IChapterCache {
             description: chapter.description,
             dateTimestamp: chapter.date.getTime(),
             image: chapter.image,
-            duration: chapter.duration
+            duration: chapter.duration,
+            mimeType: chapter.mimeType,
+            length: chapter.length
         };
         
         await this.client.setEx(
@@ -90,5 +96,45 @@ export class RedisChapterCache implements IChapterCache {
 
     async disconnect(): Promise<void> {
         await this.client.quit();
+    }
+
+    async getChapterList(key: string): Promise<Chapter[] | undefined> {
+        const data = await this.client.get(this.prefix + 'list:' + key);
+        if (!data) {
+            return undefined;
+        }
+
+        const parsed: ChapterData[] = JSON.parse(data);
+        return parsed.map(item => new Chapter(
+            item.id,
+            item.title,
+            item.fileUrl,
+            item.description,
+            new Date(item.dateTimestamp),
+            item.image,
+            item.duration,
+            item.mimeType,
+            item.length
+        ));
+    }
+
+    async setChapterList(key: string, chapters: Chapter[]): Promise<void> {
+        const dataList: ChapterData[] = chapters.map(chapter => ({
+            id: chapter.id,
+            title: chapter.title,
+            fileUrl: chapter.fileUrl,
+            description: chapter.description,
+            dateTimestamp: chapter.date.getTime(),
+            image: chapter.image,
+            duration: chapter.duration,
+            mimeType: chapter.mimeType,
+            length: chapter.length
+        }));
+        
+        await this.client.setEx(
+            this.prefix + 'list:' + key,
+            this.ttl,
+            JSON.stringify(dataList)
+        );
     }
 }

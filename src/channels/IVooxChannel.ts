@@ -82,10 +82,32 @@ export class IVooxChannel extends Channel {
         const startTime = performance.now();
         console.log(`Chapters: ${this.numChapters}`);
 
+        // Obtener el primer capítulo completo de la primera página para comprobar caché
+        const firstChapter = await this.getFirstChapter();
+        
+        if (firstChapter && this.channelUrl) {
+            const feedCacheKey = ChapterCacheKey.forFeedCache(this.channelUrl, firstChapter);
+            const cachedChapters = await Channel.chapterCache.getChapterList(feedCacheKey);
+            
+            if (cachedChapters) {
+                // Validar que la caché tiene la cantidad correcta de episodios
+                if (cachedChapters.length >= this.numChapters) {
+                    const endTime = performance.now();
+                    console.log(`Feed cache hit! First chapter unchanged (${firstChapter.title}). Returning ${cachedChapters.length} cached chapters in ${(endTime - startTime).toFixed(2)}ms`);
+                    return cachedChapters;
+                } else {
+                    console.log(`Feed cache invalid: cached ${cachedChapters.length} chapters but podcast now has ${this.numChapters}. Re-fetching...`);
+                }
+            } else {
+                console.log(`Feed cache miss. First chapter: "${firstChapter.title}". Fetching all episodes...`);
+            }
+        }
+
         const pageNumbers = Array.from({ length: Math.ceil(this.numChapters/IVooxChannel.IVOOX_CHAPTERS_PER_PAGE) }, (_, i) => i + 1);
         
         let collectedChapters: Chapter[] = [];
         let timeoutReached = false;
+        let hasBackgroundLoading = false;
     
         const timeoutPromise = new Promise<Chapter[]>((_, reject) => {
             setTimeout(() => {
@@ -111,7 +133,8 @@ export class IVooxChannel extends Channel {
                     if (timeoutReached && collectedChapters.length < this.numChapters) {
                         const remainingPages = pageNumbers.slice(i + batch.length);
                         if (remainingPages.length > 0) {
-                            this.continueLoadingInBackground(remainingPages, collectedChapters);
+                            hasBackgroundLoading = true;
+                            this.continueLoadingInBackground(remainingPages, collectedChapters, firstChapter);
                         }
                         break;
                     }
@@ -126,24 +149,59 @@ export class IVooxChannel extends Channel {
     
         collectedChapters.sort((a, b) => b.date.getTime() - a.date.getTime());
 
+        // Guardar en caché SOLO si hemos cargado la lista completa (sin background loading)
+        if (!hasBackgroundLoading && firstChapter && this.channelUrl) {
+            const feedCacheKey = ChapterCacheKey.forFeedCache(this.channelUrl, firstChapter);
+            await Channel.chapterCache.setChapterList(feedCacheKey, collectedChapters);
+            console.log(`Feed cached with ${collectedChapters.length} chapters (complete list). First chapter: "${firstChapter.title}"`);
+        } else if (hasBackgroundLoading) {
+            console.log(`Feed NOT cached (${collectedChapters.length} chapters loaded, background loading in progress)`);
+        }
+
         const endTime = performance.now();
         console.log(`fetchEpisodeList completed in ${(endTime - startTime).toFixed(2)}ms`);
 
         return collectedChapters;
     }
     
-    private async continueLoadingInBackground(remainingPages: number[], existingChapters: Chapter[]): Promise<void> {
+    private async getFirstChapter(): Promise<Chapter | undefined> {
+        try {
+            const firstPageUrl = this.channelUrl?.replace('_1.html', '_1.html');
+            if (!firstPageUrl) {
+                return undefined;
+            }
+
+            const pageHtml = (await IVooxChannel.limit(async () => await this.requestIvoox(firstPageUrl))).body || '';
+            const $channelPage = cheerio.load(pageHtml);
+            const firstEpisode = $channelPage(IVooxChannel.EPISODE_SELECTOR).first();
+            
+            if (firstEpisode.length > 0) {
+                const href = firstEpisode.attr('href');
+                if (href) {
+                    const episodeUrl = `https://ivoox.com${href}`;
+                    return await this.fetchChapterData(episodeUrl);
+                }
+            }
+            
+            return undefined;
+        } catch (error) {
+            console.error('Error getting first chapter:', error);
+            return undefined;
+        }
+    }
+
+    private async continueLoadingInBackground(remainingPages: number[], existingChapters: Chapter[], firstChapter?: Chapter): Promise<void> {
         const startTime = performance.now();
         console.log(`Continuing chapter fetch in background for ${remainingPages.length} remaining pages`);
         
-        let backgroundChaptersCount = 0;
+        const backgroundChapters: Chapter[] = [];
         
         try {
             await Promise.allSettled(
                 remainingPages.map(async (page) => {
                     try {
                         const chapters = await this.fetchPageEpisodeList(page);
-                        backgroundChaptersCount += chapters.length;
+                        backgroundChapters.push(...chapters);
                     } catch (error) {
                         console.error(`Error fetching page ${page} in background:`, error);
                     }
@@ -151,8 +209,19 @@ export class IVooxChannel extends Channel {
             );
             
             const endTime = performance.now();
-            console.log(`Background fetch completed. Total chapters: ${existingChapters.length + backgroundChaptersCount}, Background chapters: ${backgroundChaptersCount}`);
+            const totalChapters = existingChapters.length + backgroundChapters.length;
+            console.log(`Background fetch completed. Total chapters: ${totalChapters}, Background chapters: ${backgroundChapters.length}`);
             console.log(`Background fetch completed in ${(endTime - startTime).toFixed(2)}ms`);
+            
+            // Ahora que tenemos la lista completa, cachearla
+            if (firstChapter && this.channelUrl && backgroundChapters.length > 0) {
+                const allChapters = [...existingChapters, ...backgroundChapters];
+                allChapters.sort((a, b) => b.date.getTime() - a.date.getTime());
+                
+                const feedCacheKey = ChapterCacheKey.forFeedCache(this.channelUrl, firstChapter);
+                await Channel.chapterCache.setChapterList(feedCacheKey, allChapters);
+                console.log(`Feed cached with complete list (${allChapters.length} chapters) after background loading. First chapter: "${firstChapter.title}"`);
+            }
             
         } catch (error) {
             console.error('Error during background fetch:', error);

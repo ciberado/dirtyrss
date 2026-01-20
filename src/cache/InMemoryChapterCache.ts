@@ -9,13 +9,17 @@ interface ChapterData {
     dateTimestamp: number;
     image: string;
     duration: string;
+    mimeType: string;
+    length: number;
 }
 
 export class InMemoryChapterCache implements IChapterCache {
     private cache: Map<string, ChapterData>;
+    private listCache: Map<string, ChapterData[]>;
 
     constructor() {
         this.cache = new Map();
+        this.listCache = new Map();
     }
 
     get(key: string): Chapter | undefined {
@@ -31,7 +35,9 @@ export class InMemoryChapterCache implements IChapterCache {
             data.description,
             new Date(data.dateTimestamp),
             data.image,
-            data.duration
+            data.duration,
+            data.mimeType,
+            data.length
         );
     }
 
@@ -43,7 +49,9 @@ export class InMemoryChapterCache implements IChapterCache {
             description: chapter.description,
             dateTimestamp: chapter.date.getTime(),
             image: chapter.image,
-            duration: chapter.duration
+            duration: chapter.duration,
+            mimeType: chapter.mimeType,
+            length: chapter.length
         };
         this.cache.set(key, data);
     }
@@ -54,5 +62,40 @@ export class InMemoryChapterCache implements IChapterCache {
 
     clear(): void {
         this.cache.clear();
+        this.listCache.clear();
+    }
+
+    getChapterList(key: string): Chapter[] | undefined {
+        const dataList = this.listCache.get(key);
+        if (!dataList) {
+            return undefined;
+        }
+
+        return dataList.map(data => new Chapter(
+            data.id,
+            data.title,
+            data.fileUrl,
+            data.description,
+            new Date(data.dateTimestamp),
+            data.image,
+            data.duration,
+            data.mimeType,
+            data.length
+        ));
+    }
+
+    setChapterList(key: string, chapters: Chapter[]): void {
+        const dataList: ChapterData[] = chapters.map(chapter => ({
+            id: chapter.id,
+            title: chapter.title,
+            fileUrl: chapter.fileUrl,
+            description: chapter.description,
+            dateTimestamp: chapter.date.getTime(),
+            image: chapter.image,
+            duration: chapter.duration,
+            mimeType: chapter.mimeType,
+            length: chapter.length
+        }));
+        this.listCache.set(key, dataList);
     }
 }
