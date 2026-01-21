@@ -32,9 +32,16 @@ interface TwitchChannelData {
 
 export class TwitchChannel extends Channel{
 
+    private static LOGO_PATH : string = 'assets/twitch-logo.svg'
+    private static readonly TWITCH_REQUEST_OPTIONS = {
+        headers: {
+//            'User-Agent': "Wget/version (linux-gnu)",
+            'user-agent': "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+        }
+    }
+
     static twitchDlPath : string;
     static downloadingEpisodes : { [key: string]: boolean; } = {};
-    
     private allVideosData: TwitchVideoData[] | null = null;
     
     chapterUrlPrefix: string;
@@ -51,7 +58,7 @@ export class TwitchChannel extends Channel{
     protected async fetchChannelInformation(): Promise<void> {
         const programUrl = `https://twitch.tv/${this.channelName}`;
         console.info(`Configuring feed for ${programUrl}`);
-        const programResponsePage = await got(programUrl);
+        const programResponsePage = await got(programUrl, TwitchChannel.TWITCH_REQUEST_OPTIONS);
         const $ = cheerio.load(programResponsePage.body);
 
         this.username = this.channelName.toString();
@@ -66,10 +73,7 @@ export class TwitchChannel extends Channel{
         const imageProcessor = new ImageProcessor(this.staticFilesPath, this.chapterUrlPrefix);
         
         // Buscar el logo de Twitch (SVG o PNG, desde directorio original)
-        let logoPath = `${path.resolve('.')}/assets/twitch-logo.svg`;
-        if (!fs.existsSync(logoPath)) {
-            logoPath = `${path.resolve('.')}/assets/twitch-logo.png`;
-        }
+        let logoPath = `${path.resolve('.')}/${TwitchChannel.LOGO_PATH}`;
         
         this.imageUrl = await imageProcessor.processChannelImage(
             this.imageUrl,
@@ -80,7 +84,8 @@ export class TwitchChannel extends Channel{
                 backgroundColor: '#9146FF', // Color morado oficial de Twitch
                 badgeShape: 'blob',
                 badgeSize: 0.18 // 18% del ancho de la imagen
-            }
+            },
+            24 // TTL de 24 horas para regenerar la imagen
         );
     }
 

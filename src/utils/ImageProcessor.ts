@@ -26,7 +26,8 @@ export class ImageProcessor {
         originalImageUrl: string | undefined,
         platformName: string,
         channelId: string,
-        config: PlatformWatermarkConfig
+        config: PlatformWatermarkConfig,
+        ttlHours: number = 24
     ): Promise<string | undefined> {
         try {
             if (!originalImageUrl) {
@@ -34,12 +35,36 @@ export class ImageProcessor {
                 return originalImageUrl;
             }
 
-            // Verificar si ya existe la imagen procesada
-            const processedImagePath = `${this.staticFilesPath}/${platformName}/covers/${channelId}.jpg`;
+            const coversDir = `${this.staticFilesPath}/${platformName}/covers`;
             
-            if (fs.existsSync(processedImagePath)) {
-                return `${this.chapterUrlPrefix}/${platformName}/covers/${channelId}.jpg`;
+            // Buscar imágenes existentes del canal
+            if (fs.existsSync(coversDir)) {
+                const files = fs.readdirSync(coversDir)
+                    .filter(f => f.startsWith(`${channelId}_`) && f.endsWith('.jpg'));
+                
+                if (files.length > 0) {
+                    // Obtener la más reciente
+                    const latestFile = files.sort().reverse()[0];
+                    const timestamp = parseInt(latestFile.split('_')[1].replace('.jpg', ''));
+                    const ageHours = (Date.now() - timestamp) / (1000 * 60 * 60);
+                    
+                    // Si es reciente, usarla
+                    if (ageHours < ttlHours) {
+                        return `${this.chapterUrlPrefix}/${platformName}/covers/${latestFile}`;
+                    }
+                    
+                    // Borrar versiones antiguas
+                    files.forEach(f => {
+                        const filePath = `${coversDir}/${f}`;
+                        fs.unlinkSync(filePath);
+                        console.log(`Deleted old image: ${filePath}`);
+                    });
+                }
             }
+            
+            // Generar nueva imagen con timestamp
+            const timestamp = Date.now();
+            const processedImagePath = `${coversDir}/${channelId}_${timestamp}.jpg`;
             
             // Crear directorio si no existe
             const dir = path.dirname(processedImagePath);
@@ -74,7 +99,7 @@ export class ImageProcessor {
                 .toFile(processedImagePath);
             
             console.log(`Channel image processed with watermark for ${platformName}/${channelId}`);
-            return `${this.chapterUrlPrefix}/${platformName}/covers/${channelId}.jpg`;
+            return `${this.chapterUrlPrefix}/${platformName}/covers/${channelId}_${timestamp}.jpg`;
             
         } catch (err) {
             console.error(`Error processing channel image for ${platformName}/${channelId}:`, err);
