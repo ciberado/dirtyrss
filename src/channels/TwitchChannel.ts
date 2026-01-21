@@ -55,7 +55,7 @@ export class TwitchChannel extends Channel{
 
         this.username = this.channelName.toString();
         this.author = this.channelName.toString();
-        this.channelName = $('meta[name="title"]').attr('content')?.trim() || this.channelName;
+        this.channelName = `twitch:${this.username}`;
         this.description = $('meta[property="og:description"]').attr('content')?.trim();
         this.imageUrl = $('meta[property="og:image"]').attr('content')?.trim();
         this.ttlInMinutes = 60;
@@ -75,7 +75,7 @@ export class TwitchChannel extends Channel{
                 pythonPath: '/usr/bin/python3',
                 pythonOptions: [], 
                 scriptPath: path.dirname(TwitchChannel.twitchDlPath),
-                args: ['videos', this.username, '--json']
+                args: ['videos', this.username, '--json', '--all']
             };
 
             PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, (err, results : unknown) => {
@@ -116,7 +116,7 @@ export class TwitchChannel extends Channel{
         }
         
         let fileSize = 5 * 60 * 1024 * 1024;
-        const filePath = `${this.staticFilesPath}/twitch/${tc.id}.mp3`;
+        const filePath = `${this.staticFilesPath}/twitch/${tc.id}.m4a`;
         try {
             if (fs.existsSync(filePath)) {
                 fileSize = fs.statSync(filePath).size;
@@ -128,12 +128,12 @@ export class TwitchChannel extends Channel{
         const chapter = new Chapter(
             tc.id, 
             tc.title, 
-            `${this.chapterUrlPrefix}/twitch/${this.username}/${tc.id}.mp3`, 
+            `${this.chapterUrlPrefix}/twitch/${this.username}/${tc.id}.m4a`, 
             tc.title, 
             new Date(tc.publishedAt), 
             '', 
             duration, 
-            'audio/mpeg', 
+            'audio/mp4', 
             fileSize
         );
 
@@ -159,9 +159,9 @@ export class TwitchChannel extends Channel{
                 return;
             }
             
-            const tempMp3File = fileName.replace('.mp3', '.tmp.mp3');
-            if (fs.existsSync(tempMp3File)) {
-                console.log(`Episode ${episodeId} is already being converted (${tempMp3File} exists).`);
+            const tempM4aFile = fileName.replace('.m4a', '.tmp.m4a');
+            if (fs.existsSync(tempM4aFile)) {
+                console.log(`Episode ${episodeId} is already being downloaded (${tempM4aFile} exists).`);
                 return;
             }
             
@@ -170,7 +170,6 @@ export class TwitchChannel extends Channel{
                 fs.mkdirSync(dir, { recursive: true });
             }
             
-            const tempM4aFile = fileName.replace('.mp3', '.m4a');
             const opt = {
                 mode: 'text' as const,
                 pythonPath: '/usr/bin/python3',
@@ -183,37 +182,25 @@ export class TwitchChannel extends Channel{
             console.log(`Downloading episode ${episodeId} in the background`);
             TwitchChannel.downloadingEpisodes[episodeId] = true;
             PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, (err, results) => {
+                delete TwitchChannel.downloadingEpisodes[episodeId];
                 if (err) {
-                    delete TwitchChannel.downloadingEpisodes[episodeId];
                     console.error(`[ERROR] Downloading twitch show ${episodeId} (${err}).`);
                     reject(err);
                     return;
                 }
-                console.log(`Episode downloaded at ${tempM4aFile}, converting to MP3...`);
+                console.log(`Episode downloaded at ${tempM4aFile}`);
                 
-                // Convert M4A to MP3 using ffmpeg to a temp file, then move
-                const tempMp3File = fileName.replace('.mp3', '.tmp.mp3');
-                exec(`ffmpeg -i "${tempM4aFile}" -codec:a libmp3lame -qscale:a 2 "${tempMp3File}" -y`, (convertErr: any) => {
-                    delete TwitchChannel.downloadingEpisodes[episodeId];
-                    if (convertErr) {
-                        console.error(`[ERROR] Converting ${episodeId} to MP3 (${convertErr}).`);
-                        reject(convertErr);
-                        return;
-                    }
-                    // Delete temp M4A file
-                    fs.unlinkSync(tempM4aFile);
-                    // Move temp MP3 to final name (atomic operation)
-                    fs.renameSync(tempMp3File, fileName);
-                    console.log(`Episode converted to MP3 at ${fileName}.`);
-                    resolve({fileName});
-                });
+                // Move temp M4A to final name (atomic operation)
+                fs.renameSync(tempM4aFile, fileName);
+                console.log(`Episode saved at ${fileName}.`);
+                resolve({fileName});
             });
     
         });
     }
 
     public getFileNameForEpisode(directoryRoot: string, episodeId: string) : string | undefined {
-        const fileName = `${directoryRoot}/twitch/${episodeId}.mp3`;
+        const fileName = `${directoryRoot}/twitch/${episodeId}.m4a`;
         console.log(`Ensuring ${fileName} is available.`);
 
         // check if the file exists, or return the default one

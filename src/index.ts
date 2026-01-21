@@ -106,7 +106,7 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId', async (req, reply) =>
     }
 });
 
-fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId.mp3', async (req, reply) => {
+fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId.m4a', async (req, reply) => {
     try {
         const defaultPort = req.protocol === 'https' ? 443 : 80;
         const port = req.port || defaultPort;
@@ -138,12 +138,12 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId.mp3', async 
                 .header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
                 .header('Accept-Ranges', 'bytes')
                 .header('Content-Length', chunkSize)
-                .header('Content-Type', 'audio/mpeg');
+                .header('Content-Type', 'audio/mp4');
             
             return reply.send(stream);
         } else {
             reply
-                .header('Content-Type', 'audio/mpeg')
+                .header('Content-Type', 'audio/mp4')
                 .header('Content-Length', fileSize)
                 .header('Accept-Ranges', 'bytes');
             
