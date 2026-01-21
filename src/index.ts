@@ -106,7 +106,7 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId', async (req, reply) =>
     }
 });
 
-fastify.get<{Params : TwitchParamType}>('/twitch/:showId/:episodeId.m4a', async (req, reply) => {
+fastify.get<{Params : TwitchParamType}>('/twitch/chapters/:showId/:episodeId.m4a', async (req, reply) => {
     try {
         const defaultPort = req.protocol === 'https' ? 443 : 80;
         const port = req.port || defaultPort;
