@@ -56,7 +56,6 @@ export class TwitchChannel extends Channel{
 
         this.username = this.channelName.toString();
         this.author = this.channelName.toString();
-        this.channelName = `twitch:${this.username}`;
         this.description = $('meta[property="og:description"]').attr('content')?.trim();
         this.imageUrl = $('meta[property="og:image"]').attr('content')?.trim();
         this.ttlInMinutes = 60;
@@ -138,7 +137,7 @@ export class TwitchChannel extends Channel{
         }
         
         let fileSize = 5 * 60 * 1024 * 1024;
-        const filePath = `${this.staticFilesPath}/twitch/${tc.id}.m4a`;
+        const filePath = `${this.staticFilesPath}/twitch/chapters/${this.username}/${tc.id}.m4a`;
         try {
             if (fs.existsSync(filePath)) {
                 fileSize = fs.statSync(filePath).size;
@@ -150,7 +149,7 @@ export class TwitchChannel extends Channel{
         const chapter = new Chapter(
             tc.id, 
             tc.title, 
-            `${this.chapterUrlPrefix}/twitch/${this.username}/${tc.id}.m4a`, 
+            `${this.chapterUrlPrefix}/twitch/chapters/${this.username}/${tc.id}.m4a`, 
             tc.title, 
             new Date(tc.publishedAt), 
             '', 
@@ -222,7 +221,7 @@ export class TwitchChannel extends Channel{
     }
 
     public getFileNameForEpisode(directoryRoot: string, episodeId: string) : string | undefined {
-        const fileName = `${directoryRoot}/twitch/${episodeId}.m4a`;
+        const fileName = `${directoryRoot}/twitch/chapters/${this.username}/${episodeId}.m4a`;
         console.log(`Ensuring ${fileName} is available.`);
 
         // check if the file exists, or return the default one
