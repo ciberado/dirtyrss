@@ -65,10 +65,10 @@ export class TwitchChannel extends Channel{
         // Procesar imagen con watermark de Twitch
         const imageProcessor = new ImageProcessor(this.staticFilesPath, this.chapterUrlPrefix);
         
-        // Buscar el logo de Twitch (SVG o PNG)
-        let logoPath = `${this.staticFilesPath}/twitch-logo.svg`;
+        // Buscar el logo de Twitch (SVG o PNG, desde directorio original)
+        let logoPath = `${path.resolve('.')}/assets/twitch-logo.svg`;
         if (!fs.existsSync(logoPath)) {
-            logoPath = `${this.staticFilesPath}/twitch-logo.png`;
+            logoPath = `${path.resolve('.')}/assets/twitch-logo.png`;
         }
         
         this.imageUrl = await imageProcessor.processChannelImage(

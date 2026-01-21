@@ -101,8 +101,8 @@ export class ImageProcessor {
             .png()
             .toBuffer();
         
-        // Cargar la máscara PNG del badge
-        const shapePath = `${this.staticFilesPath}/badge-shape.png`;
+        // Cargar la máscara PNG del badge (desde directorio original)
+        const shapePath = `${path.resolve('.')}/assets/badge-shape.png`;
         
         if (!fs.existsSync(shapePath)) {
             console.warn(`Badge shape not found at ${shapePath}, using SVG fallback`);

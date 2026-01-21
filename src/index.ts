@@ -11,9 +11,9 @@ import { LavanguardiaChannel } from './channels/LavanguardiaChannel.js';
 const FASTIFY_PORT = parseInt(process.env.PORT!) || 3000;
 
 const FASTIFY_STATIC = '/tmp/public';
-const ASSETS_DIRECTORY = `${path.resolve('.')}/assets/`;
+const PUBLIC_ASSETS_DIRECTORY = `${path.resolve('.')}/assets/public/`;
 
-fse.copySync(ASSETS_DIRECTORY, FASTIFY_STATIC);
+fse.copySync(PUBLIC_ASSETS_DIRECTORY, `${FASTIFY_STATIC}/assets`);
 
 const fastify = Fastify({
     trustProxy: true
