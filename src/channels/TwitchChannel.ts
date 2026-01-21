@@ -11,6 +11,7 @@ import {PythonShell} from 'python-shell';
 import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
 import { ChapterCacheKey } from '../cache/IChapterCache.js';
+import { ImageProcessor } from '../utils/ImageProcessor.js';
 
 interface TwitchVideoData {
     id: string;
@@ -60,7 +61,28 @@ export class TwitchChannel extends Channel{
         this.imageUrl = $('meta[property="og:image"]').attr('content')?.trim();
         this.ttlInMinutes = 60;
         this.siteUrl = programUrl;
-        this.link = programUrl;  
+        this.link = programUrl;
+        
+        // Procesar imagen con watermark de Twitch
+        const imageProcessor = new ImageProcessor(this.staticFilesPath, this.chapterUrlPrefix);
+        
+        // Buscar el logo de Twitch (SVG o PNG)
+        let logoPath = `${this.staticFilesPath}/twitch-logo.svg`;
+        if (!fs.existsSync(logoPath)) {
+            logoPath = `${this.staticFilesPath}/twitch-logo.png`;
+        }
+        
+        this.imageUrl = await imageProcessor.processChannelImage(
+            this.imageUrl,
+            'twitch',
+            this.username,
+            {
+                logoPath: logoPath,
+                backgroundColor: '#9146FF', // Color morado oficial de Twitch
+                badgeShape: 'blob',
+                badgeSize: 0.18 // 18% del ancho de la imagen
+            }
+        );
     }
 
     private async fetchAllVideosData(): Promise<TwitchVideoData[]> {
