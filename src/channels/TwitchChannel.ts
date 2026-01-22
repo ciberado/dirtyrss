@@ -63,16 +63,49 @@ export class TwitchChannel extends Channel{
         return TwitchChannel.BADGE_COLOR;
     }
 
+    private async fetchChannelMetadata(url: string, maxAttempts: number = 3, delayMs: number = 2000): Promise<{ imageUrl?: string, description?: string }> {
+        let imageUrl: string | undefined;
+        let description: string | undefined;
+        
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (attempt > 1) {
+                console.log(`[RETRY] Attempt ${attempt}/${maxAttempts} - waiting ${delayMs}ms for dynamic content...`);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+            
+            const response = await got(url, TwitchChannel.TWITCH_REQUEST_OPTIONS);
+            const $ = cheerio.load(response.body);
+            
+            imageUrl = $('meta[property="og:image"]').attr('content')?.trim();
+            description = $('meta[property="og:description"]').attr('content')?.trim();
+            
+            console.log(`[DEBUG] Attempt ${attempt} - og:image: ${imageUrl}`);
+            
+            // Si contiene "profile" es la imagen correcta
+            if (imageUrl && imageUrl.includes('profile')) {
+                console.log(`[SUCCESS] Got correct profile image on attempt ${attempt}`);
+                break;
+            }
+            
+            // Si es el último intento, usar lo que tengamos
+            if (attempt === maxAttempts) {
+                console.warn(`[WARNING] Could not get profile image after ${maxAttempts} attempts, using: ${imageUrl}`);
+            }
+        }
+        
+        return { imageUrl, description };
+    }
+
     protected async fetchChannelInformation(): Promise<void> {
         const programUrl = `https://twitch.tv/${this.channelName}`;
         console.info(`Configuring feed for ${programUrl}`);
-        const programResponsePage = await got(programUrl, TwitchChannel.TWITCH_REQUEST_OPTIONS);
-        const $ = cheerio.load(programResponsePage.body);
+        
+        const { imageUrl, description } = await this.fetchChannelMetadata(programUrl);
 
         this.username = this.channelName.toString();
         this.author = this.channelName.toString();
-        this.description = $('meta[property="og:description"]').attr('content')?.trim();
-        this.imageUrl = $('meta[property="og:image"]').attr('content')?.trim();
+        this.description = description;
+        this.imageUrl = imageUrl;
         this.ttlInMinutes = 60;
         this.siteUrl = programUrl;
         this.link = programUrl;
