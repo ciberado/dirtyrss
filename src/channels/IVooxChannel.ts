@@ -97,7 +97,7 @@ export class IVooxChannel extends Channel {
         const firstChapter = await this.getFirstChapter();
         
         if (firstChapter && this.channelUrl) {
-            const feedCacheKey = ChapterCacheKey.forFeedCache(this.channelUrl, firstChapter);
+            const feedCacheKey = ChapterCacheKey.forFeedCache('ivoox', this.channelName, firstChapter.id);
             
             console.log(`[DEBUG] Channel URL: ${this.channelUrl}`);
             console.log(`[DEBUG] First chapter - id: ${firstChapter.id}, title: ${firstChapter.title}, fileUrl: ${firstChapter.fileUrl}`);
@@ -169,7 +169,7 @@ export class IVooxChannel extends Channel {
 
         // Guardar en caché SOLO si hemos cargado la lista completa (sin background loading)
         if (!hasBackgroundLoading && firstChapter && this.channelUrl) {
-            const feedCacheKey = ChapterCacheKey.forFeedCache(this.channelUrl, firstChapter);
+            const feedCacheKey = ChapterCacheKey.forFeedCache('ivoox', this.channelName, firstChapter.id);
             console.log(`[DEBUG] Saving to cache with key: ${feedCacheKey}`);
             await Channel.chapterCache.setChapterList(feedCacheKey, collectedChapters);
             console.log(`Feed cached with ${collectedChapters.length} chapters (complete list). First chapter: "${firstChapter.title}"`);
@@ -237,7 +237,7 @@ export class IVooxChannel extends Channel {
                 const allChapters = [...existingChapters, ...backgroundChapters];
                 allChapters.sort((a, b) => b.date.getTime() - a.date.getTime());
                 
-                const feedCacheKey = ChapterCacheKey.forFeedCache(this.channelUrl, firstChapter);
+                const feedCacheKey = ChapterCacheKey.forFeedCache('ivoox', this.channelName, firstChapter.id);
                 await Channel.chapterCache.setChapterList(feedCacheKey, allChapters);
                 console.log(`Feed cached with complete list (${allChapters.length} chapters) after background loading. First chapter: "${firstChapter.title}"`);
             }
@@ -278,7 +278,10 @@ export class IVooxChannel extends Channel {
     }
 
     protected async fetchChapterData(url: string): Promise<Chapter> {
-        const cacheKey = ChapterCacheKey.fromUrl(url);
+        const matches = url.match(/\d{6,12}/g) || [];
+        const id = matches.pop()!;
+        
+        const cacheKey = ChapterCacheKey.forChapter('ivoox', this.channelName, id);
         
         const cachedChapter = await Channel.chapterCache.get(cacheKey);
         if (cachedChapter) {
@@ -286,9 +289,6 @@ export class IVooxChannel extends Channel {
         }
         
         const chapterHtml = (await IVooxChannel.limit(async () => await this.requestIvoox(url))).body;
-
-        const matches = url.match(/\d{6,12}/g) || [];
-        const id = matches.pop()!;
         const audioRealUrl = `https://www.ivoox.com/listenembeded_mn_${id}_1.mp3?source=EMBEDEDHTML5`;
 
         const { title, description, dateText, duration, img } = this.parseAndExtract(chapterHtml, ($) => {

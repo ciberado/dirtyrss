@@ -1,5 +1,4 @@
 import { Chapter } from '../models/Chapter.js';
-import { createHash } from 'crypto';
 
 export interface IChapterCache {
     get(key: string): Chapter | undefined | Promise<Chapter | undefined>;
@@ -12,19 +11,17 @@ export interface IChapterCache {
 }
 
 export class ChapterCacheKey {
-    static fromUrl(url: string): string {
-        return createHash('md5').update(`url:${url}`).digest('hex');
+    /**
+     * Genera clave para un chapter: {platform}:{podcast_name}:{chapter_id}
+     */
+    static forChapter(platform: string, podcastName: string, chapterId: string): string {
+        return `${platform}:${podcastName}:${chapterId}`;
     }
     
-    static fromId(source: string, id: string): string {
-        return createHash('md5').update(`${source}:${id}`).digest('hex');
-    }
-    
-    static forFeedCache(channelUrl: string, firstChapter: Chapter): string {
-        // Usar id, title y fileUrl para identificar el primer capítulo
-        // Son los campos realmente importantes y estables
-        return createHash('md5').update(
-            `feed:${channelUrl}:${firstChapter.id}:${firstChapter.title}:${firstChapter.fileUrl}`
-        ).digest('hex');
+    /**
+     * Genera clave para un feed completo: feed:{platform}:{podcast_name}:{first_chapter_id}
+     */
+    static forFeedCache(platform: string, podcastName: string, firstChapterId: string): string {
+        return `feed:${platform}:${podcastName}:${firstChapterId}`;
     }
 }

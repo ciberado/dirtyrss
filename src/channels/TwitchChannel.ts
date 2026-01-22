@@ -119,7 +119,7 @@ export class TwitchChannel extends Channel{
     }
 
     protected async fetchChapterData(id: string): Promise<Chapter> {
-        const cacheKey = ChapterCacheKey.fromId('twitch', id);
+        const cacheKey = ChapterCacheKey.forChapter('twitch', this.username, id);
         
         const cachedChapter = await Channel.chapterCache.get(cacheKey);
         if (cachedChapter) {

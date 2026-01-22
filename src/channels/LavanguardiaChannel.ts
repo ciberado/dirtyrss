@@ -29,18 +29,18 @@ export class LavanguardiaChannel extends Channel {
     }
 
     protected async fetchChapterData(fileUrl: string): Promise<Chapter> {
-        const cacheKey = ChapterCacheKey.fromUrl(fileUrl);
-        
-        const cachedChapter = await Channel.chapterCache.get(cacheKey);
-        if (cachedChapter) {
-            return cachedChapter;
-        }
-
         const chapterResponsePage = await got(fileUrl);
         const chapterPageHtml = chapterResponsePage.body;
         const $ = cheerio.load(chapterPageHtml);
 
         const id = fileUrl.match(/\/(\d+)\/[^/]+$/)?.[1] || '';
+        const cacheKey = ChapterCacheKey.forChapter('lavanguardia', this.channelName, id);
+        
+        const cachedChapter = await Channel.chapterCache.get(cacheKey);
+        if (cachedChapter) {
+            return cachedChapter;
+        }
+        
         console.log(`Fetching chapter ${id} from ${fileUrl}`);
         const title = $('h1').text().trim();
         const description = 
