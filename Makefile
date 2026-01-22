@@ -37,7 +37,10 @@ compose-clear-cache:
 	@echo "Borrando imágenes JPG procesadas..."
 	docker compose exec dirtyrss find /tmp/public -type f -name "*.jpg" -delete
 	@echo "Borrando feeds cacheados en Redis..."
-	docker compose exec redis redis-cli KEYS "chapter:list:feed:*" | xargs -r docker compose exec -T redis redis-cli DEL
+	@echo "Keys encontradas:"
+	@docker compose exec redis redis-cli --scan --pattern "chapter:list:feed:*"
+	@echo "Borrando..."
+	@docker compose exec redis sh -c 'redis-cli --scan --pattern "chapter:list:feed:*" | while read key; do redis-cli DEL "$$key"; done'
 	@echo "Cache limpiado"
 
 compose-up: compose-clear-cache compose-clean compose-build compose-up-redis
