@@ -36,11 +36,12 @@ export class ImageProcessor {
             }
 
             const coversDir = `${this.staticFilesPath}/${platformName}/covers`;
+            const sanitizedChannelId = channelId.replace(/\s+/g, '_');
             
             // Buscar imágenes existentes del canal
             if (fs.existsSync(coversDir)) {
                 const files = fs.readdirSync(coversDir)
-                    .filter(f => f.startsWith(`${channelId}_`) && f.endsWith('.jpg'));
+                    .filter(f => f.startsWith(`${sanitizedChannelId}_`) && f.endsWith('.jpg'));
                 
                 if (files.length > 0) {
                     // Obtener la más reciente
@@ -64,7 +65,7 @@ export class ImageProcessor {
             
             // Generar nueva imagen con timestamp
             const timestamp = Date.now();
-            const processedImagePath = `${coversDir}/${channelId}_${timestamp}.jpg`;
+            const processedImagePath = `${coversDir}/${sanitizedChannelId}_${timestamp}.jpg`;
             
             // Crear directorio si no existe
             const dir = path.dirname(processedImagePath);
@@ -99,7 +100,7 @@ export class ImageProcessor {
                 .toFile(processedImagePath);
             
             console.log(`Channel image processed with watermark for ${platformName}/${channelId}`);
-            return `${this.chapterUrlPrefix}/${platformName}/covers/${channelId}_${timestamp}.jpg`;
+            return `${this.chapterUrlPrefix}/${platformName}/covers/${sanitizedChannelId}_${timestamp}.jpg`;
             
         } catch (err) {
             console.error(`Error processing channel image for ${platformName}/${channelId}:`, err);

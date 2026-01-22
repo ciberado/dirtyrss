@@ -163,8 +163,12 @@ interface IvooxParamType {
 
 fastify.get<{Params : IvooxParamType}>('/ivoox/:showId', async (req, reply) => {
     try {    
+        const defaultPort = req.protocol === 'https' ? 443 : 80;
+        const port = req.port || defaultPort;
+        const portSuffix = (port === 80 && req.protocol === 'http') || (port === 443 && req.protocol === 'https') ? '' : `:${port}`;
+        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}${portSuffix}`;
         const channelName = req.params.showId;
-        const ic = new IVooxChannel(channelName);
+        const ic = new IVooxChannel(channelName, chapterUrlPrefix, FASTIFY_STATIC);
         const xmlFeed = await ic.generateFeed();
         if (xmlFeed === undefined) {
             reply.code(404).type('text/html').send(`Podcast ${channelName} not found.`);

@@ -5,6 +5,9 @@ import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
 import { performance } from 'perf_hooks';
 import { ChapterCacheKey } from '../cache/IChapterCache.js';
+import { ImageProcessor } from '../utils/ImageProcessor.js';
+import * as path from 'path';
+import * as fs from 'fs';
 
 export class IVooxChannel extends Channel {
 
@@ -21,6 +24,7 @@ export class IVooxChannel extends Channel {
     private static readonly EPISODE_SELECTOR:string = '.d-flex > .d-flex > h3 > a';
     private static readonly EPISODE_IMAGE_SELECTOR:string = '.image-wrapper.pr-2 > picture > img';
 
+    private static readonly LOGO_PATH: string = 'assets/ivoox-logo.svg';
     private static readonly IVOOX_FETCH_TIMEOUT_MS:number = parseInt(process.env.IVOOX_FETCH_TIMEOUT_MS ?? "8000");
     private static readonly IVOOX_FETCH_PAGES_BATCH_SIZE:number = parseInt(process.env.IVOOX_FETCH_PAGES_BATCH_SIZE ?? "5");
     private static readonly IVOOX_MAX_REQUESTS_PER_SECOND:number = parseInt(process.env.IVOOX_MAX_CALLS_PER_SECOND ?? "90");
@@ -34,9 +38,13 @@ export class IVooxChannel extends Channel {
 
     private channelUrl? : string;
     private numChapters:number = 0;
+    private staticFilesPath: string = '';
+    private chapterUrlPrefix: string = '';
 
-    constructor(channelName: string) {
+    constructor(channelName: string, chapterUrlPrefix: string = '', staticFilesPath: string = '/tmp/public') {
         super(channelName);
+        this.chapterUrlPrefix = chapterUrlPrefix;
+        this.staticFilesPath = staticFilesPath;
     }
 
     private fromSpanishDate(text: string): Date {
@@ -87,6 +95,21 @@ export class IVooxChannel extends Channel {
         this.ttlInMinutes = 60;
         this.siteUrl = this.channelUrl;
         this.link = this.channelUrl;
+        
+        // Aplicar watermark de iVoox
+        const imageProcessor = new ImageProcessor(this.staticFilesPath, this.chapterUrlPrefix);
+        this.imageUrl = await imageProcessor.processChannelImage(
+            this.imageUrl,
+            'ivoox',
+            this.channelName,
+            {
+                logoPath: `${path.resolve('.')}/${IVooxChannel.LOGO_PATH}`,
+                backgroundColor: '#F76D0E',
+                badgeShape: 'blob',
+                badgeSize: 0.18
+            },
+            24
+        );
     }
 
     protected async fetchEpisodeList(): Promise<Chapter[]> {
