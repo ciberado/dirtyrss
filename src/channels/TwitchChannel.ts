@@ -1,16 +1,14 @@
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
 
 import * as cheerio from "cheerio"; 
 import { default as got } from 'got';
-import commandExists from 'command-exists';
-import { downloadRelease } from '@terascope/fetch-github-release';
 import {PythonShell} from 'python-shell';
 
 import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
 import { ChapterCacheKey } from '../cache/IChapterCache.js';
+import { ExternalTools } from '../utils/ExternalTools.js';
 
 interface TwitchVideoData {
     id: string;
@@ -267,29 +265,8 @@ export class TwitchChannel extends Channel{
 }
 
 try {
-    console.debug(`Checking for Python3.`);
-    const python3Exists = commandExists.sync('python3');
-    if (python3Exists === false) {
-        throw 'Python3 not found in PATH. Please install it from https://www.python.org/downloads.';
-    }
-    console.info(`Python3 detected!`);
-
-    console.debug(`Checking for ffmpeg.`);
-    const ffmpegExists = commandExists.sync('ffmpeg');
-    if (ffmpegExists === false) {
-        throw 'ffmpeg not found in PATH. Please install it from https://www.ffmpeg.org/download.html.';
-    }
-    console.info(`ffmpeg detected!`);
-
-    const twitchdl : string[] = await downloadRelease(
-        'ihabunek', 'twitch-dl', '/tmp', 
-        (r: any) => true,
-        (a: any) => a.name.includes('pyz'),
-        true, false);
-    TwitchChannel.twitchDlPath = twitchdl[0];
-    console.info(`TwitchDL downloaded at ${TwitchChannel.twitchDlPath}.`);
+    TwitchChannel.twitchDlPath = await ExternalTools.getTwitchDlPath();
 } catch (err) {
     console.error(err);
-    //process.exit(1);
 }
 //# sourceMappingURL=TwitchChannel.js.map

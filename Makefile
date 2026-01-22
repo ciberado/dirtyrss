@@ -8,7 +8,7 @@ build:
 run:build
 	npm run start
 
-compose-up:
+compose-up-memory:
 	docker compose up -d
 
 compose-up-redis:
