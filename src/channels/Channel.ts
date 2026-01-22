@@ -90,7 +90,7 @@ export abstract class Channel {
                 logoPath: fullLogoPath,
                 backgroundColor: backgroundColor,
                 badgeShape: 'blob',
-                badgeSize: 0.18
+                badgeSize: 0.155
             },
             24
         );

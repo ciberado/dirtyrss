@@ -90,11 +90,19 @@ export class ImageProcessor {
             // Crear el badge según la forma configurada
             const badgeBuffer = await this.createBadge(config, badgeSize);
             
-            // Componer el badge en la esquina superior derecha
+            // Recortar el badge a su contenido (eliminar transparencia)
+            const trimmedBadge = await sharp(badgeBuffer)
+                .trim()
+                .toBuffer();
+            
+            const trimmedMetadata = await sharp(trimmedBadge).metadata();
+            
+            // Componer el badge pegado a los bordes superior y derecho
             await sharp(response)
                 .composite([{
-                    input: badgeBuffer,
-                    gravity: 'northeast',
+                    input: trimmedBadge,
+                    top: 0,
+                    left: metadata.width! - trimmedMetadata.width!
                 }])
                 .jpeg({ quality: 90 })
                 .toFile(processedImagePath);
