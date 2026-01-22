@@ -136,9 +136,9 @@ export class ImageProcessor {
             return await sharp(Buffer.from(badgeSvg)).png().toBuffer();
         }
         
-        // Redimensionar el shape
+        // Redimensionar el shape (fill para que ocupe todo el espacio sin márgenes)
         const { data, info } = await sharp(shapePath)
-            .resize(badgeSize, badgeSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+            .resize(badgeSize, badgeSize, { fit: 'fill', background: { r: 0, g: 0, b: 0, alpha: 0 } })
             .ensureAlpha()
             .raw()
             .toBuffer({ resolveWithObject: true });
