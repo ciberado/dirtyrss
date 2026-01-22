@@ -99,13 +99,13 @@ export class IVooxChannel extends Channel {
         if (firstChapter && this.channelUrl) {
             const feedCacheKey = ChapterCacheKey.forFeedCache('ivoox', this.channelName, firstChapter.id);
             
-            console.log(`[DEBUG] Channel URL: ${this.channelUrl}`);
-            console.log(`[DEBUG] First chapter - id: ${firstChapter.id}, title: ${firstChapter.title}, fileUrl: ${firstChapter.fileUrl}`);
-            console.log(`[DEBUG] Feed cache key: ${feedCacheKey}`);
+            console.log(`Channel URL: ${this.channelUrl}`);
+            console.log(`First chapter - id: ${firstChapter.id}, title: ${firstChapter.title}, fileUrl: ${firstChapter.fileUrl}`);
+            console.log(`Feed cache key: ${feedCacheKey}`);
             
             const cachedChapters = await Channel.chapterCache.getChapterList(feedCacheKey);
             
-            console.log(`[DEBUG] Cache result: ${cachedChapters ? `found ${cachedChapters.length} chapters` : 'NOT FOUND'}`);
+            console.log(`Cache result: ${cachedChapters ? `found ${cachedChapters.length} chapters` : 'NOT FOUND'}`);
             
             if (cachedChapters) {
                 // Validar que la caché tiene la cantidad correcta de episodios
