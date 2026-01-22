@@ -8,6 +8,8 @@ import { ChapterCacheKey } from '../cache/IChapterCache.js';
 
 export class IVooxChannel extends Channel {
 
+    // Lock en memoria para evitar fetches concurrentes
+    private static activeFetches = new Set<string>();
 
     private static readonly EPISODE_NAME_SELECTOR:string = 'h1';
     private static readonly PODCAST_AUTHOR_SELECTOR:string = 'a.text-black.font-weight-normal';
@@ -109,6 +111,19 @@ export class IVooxChannel extends Channel {
 
     protected async fetchEpisodeList(): Promise<Chapter[]> {
         const startTime = performance.now();
+        const lockKey = `ivoox:${this.channelName}`;
+        
+        // Si ya hay un fetch activo, devolver caché
+        if (IVooxChannel.activeFetches.has(lockKey)) {
+            console.log(`Fetch already in progress for ${lockKey}, returning cached data`);
+            const cachedChapters = await this.getCachedFeed();
+            if (cachedChapters) {
+                return cachedChapters;
+            }
+            console.log(`No cache available while fetch in progress, returning empty array`);
+            return [];
+        }
+        
         console.log(`Chapters: ${this.numChapters}`);
 
         // Obtener el primer capítulo completo de la primera página para comprobar caché
@@ -139,66 +154,84 @@ export class IVooxChannel extends Channel {
             }
         }
 
-        const pageNumbers = Array.from({ length: Math.ceil(this.numChapters/IVooxChannel.IVOOX_CHAPTERS_PER_PAGE) }, (_, i) => i + 1);
+        // Adquirir lock
+        IVooxChannel.activeFetches.add(lockKey);
         
-        let collectedChapters: Chapter[] = [];
-        let timeoutReached = false;
-        let hasBackgroundLoading = false;
-    
-        const timeoutPromise = new Promise<Chapter[]>((_, reject) => {
-            setTimeout(() => {
-                timeoutReached = true;
-                reject(new Error('Timeout reached'));
-            }, IVooxChannel.IVOOX_FETCH_TIMEOUT_MS);
-        });
-    
         try {
-            for (let i = 0; i < pageNumbers.length && !timeoutReached; i += IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE) {
-                const batch = pageNumbers.slice(i, i + IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE);
-                
-                try {
-                    const batchResults = await Promise.race([
-                        Promise.all(batch.map(page => this.fetchPageEpisodeList(page))),
-                        timeoutPromise
-                    ]) as Chapter[][];
-    
-                    for (const pageChapters of batchResults) {
-                        collectedChapters.push(...pageChapters);
-                    }
-                } catch (error) {
-                    if (timeoutReached && collectedChapters.length < this.numChapters) {
-                        const remainingPages = pageNumbers.slice(i + batch.length);
-                        if (remainingPages.length > 0) {
-                            hasBackgroundLoading = true;
-                            this.continueLoadingInBackground(remainingPages, collectedChapters, firstChapter);
+            const pageNumbers = Array.from({ length: Math.ceil(this.numChapters/IVooxChannel.IVOOX_CHAPTERS_PER_PAGE) }, (_, i) => i + 1);
+            
+            let collectedChapters: Chapter[] = [];
+            let timeoutReached = false;
+            let hasBackgroundLoading = false;
+        
+            const timeoutPromise = new Promise<Chapter[]>((_, reject) => {
+                setTimeout(() => {
+                    timeoutReached = true;
+                    reject(new Error('Timeout reached'));
+                }, IVooxChannel.IVOOX_FETCH_TIMEOUT_MS);
+            });
+        
+            try {
+                for (let i = 0; i < pageNumbers.length && !timeoutReached; i += IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE) {
+                    const batch = pageNumbers.slice(i, i + IVooxChannel.IVOOX_FETCH_PAGES_BATCH_SIZE);
+                    
+                    try {
+                        const batchResults = await Promise.race([
+                            Promise.all(batch.map(page => this.fetchPageEpisodeList(page))),
+                            timeoutPromise
+                        ]) as Chapter[][];
+        
+                        for (const pageChapters of batchResults) {
+                            collectedChapters.push(...pageChapters);
                         }
-                        break;
+                    } catch (error) {
+                        if (timeoutReached && collectedChapters.length < this.numChapters) {
+                            const remainingPages = pageNumbers.slice(i + batch.length);
+                            if (remainingPages.length > 0) {
+                                hasBackgroundLoading = true;
+                                this.continueLoadingInBackground(remainingPages, collectedChapters, firstChapter);
+                            }
+                            break;
+                        }
+                        throw error;
                     }
+                }
+            } catch (error) {
+                if (!timeoutReached) {
                     throw error;
                 }
             }
-        } catch (error) {
-            if (!timeoutReached) {
-                throw error;
+        
+            collectedChapters.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+            // Guardar en caché SOLO si hemos cargado la lista completa (sin background loading)
+            if (!hasBackgroundLoading && firstChapter && this.channelUrl) {
+                const feedCacheKey = ChapterCacheKey.forFeedCache('ivoox', this.channelName, firstChapter.id);
+                console.log(`[DEBUG] Saving to cache with key: ${feedCacheKey}`);
+                await Channel.chapterCache.setChapterList(feedCacheKey, collectedChapters);
+                console.log(`Feed cached with ${collectedChapters.length} chapters (complete list). First chapter: "${firstChapter.title}"`);
+            } else if (hasBackgroundLoading) {
+                console.log(`Feed NOT cached (${collectedChapters.length} chapters loaded, background loading in progress)`);
             }
+
+            const endTime = performance.now();
+            console.log(`fetchEpisodeList completed in ${(endTime - startTime).toFixed(2)}ms`);
+
+            return collectedChapters;
+        } finally {
+            // SIEMPRE liberar el lock
+            IVooxChannel.activeFetches.delete(lockKey);
         }
+    }
     
-        collectedChapters.sort((a, b) => b.date.getTime() - a.date.getTime());
-
-        // Guardar en caché SOLO si hemos cargado la lista completa (sin background loading)
-        if (!hasBackgroundLoading && firstChapter && this.channelUrl) {
-            const feedCacheKey = ChapterCacheKey.forFeedCache('ivoox', this.channelName, firstChapter.id);
-            console.log(`[DEBUG] Saving to cache with key: ${feedCacheKey}`);
-            await Channel.chapterCache.setChapterList(feedCacheKey, collectedChapters);
-            console.log(`Feed cached with ${collectedChapters.length} chapters (complete list). First chapter: "${firstChapter.title}"`);
-        } else if (hasBackgroundLoading) {
-            console.log(`Feed NOT cached (${collectedChapters.length} chapters loaded, background loading in progress)`);
+    private async getCachedFeed(): Promise<Chapter[] | undefined> {
+        const firstChapter = await this.getFirstChapter();
+        if (!firstChapter || !this.channelUrl) {
+            return undefined;
         }
-
-        const endTime = performance.now();
-        console.log(`fetchEpisodeList completed in ${(endTime - startTime).toFixed(2)}ms`);
-
-        return collectedChapters;
+        
+        const feedCacheKey = ChapterCacheKey.forFeedCache('ivoox', this.channelName, firstChapter.id);
+        return await Channel.chapterCache.getChapterList(feedCacheKey);
     }
     
     private async getFirstChapter(): Promise<Chapter | undefined> {
@@ -229,6 +262,7 @@ export class IVooxChannel extends Channel {
 
     private async continueLoadingInBackground(remainingPages: number[], existingChapters: Chapter[], firstChapter?: Chapter): Promise<void> {
         const startTime = performance.now();
+        const lockKey = `ivoox:${this.channelName}`;
         console.log(`Continuing chapter fetch in background for ${remainingPages.length} remaining pages`);
         
         const backgroundChapters: Chapter[] = [];
@@ -262,6 +296,9 @@ export class IVooxChannel extends Channel {
             
         } catch (error) {
             console.error('Error during background fetch:', error);
+        } finally {
+            // Liberar lock después del background loading
+            IVooxChannel.activeFetches.delete(lockKey);
         }
     }
 

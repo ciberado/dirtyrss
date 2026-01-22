@@ -33,7 +33,6 @@ export class TwitchChannel extends Channel{
     private static readonly BADGE_COLOR: string = '#9146FF';
     private static readonly TWITCH_REQUEST_OPTIONS = {
         headers: {
-//            'User-Agent': "Wget/version (linux-gnu)",
             'user-agent': "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
         }
     }
