@@ -4,6 +4,9 @@ import { performance } from 'perf_hooks';
 import { IChapterCache } from '../cache/IChapterCache.js';
 import { InMemoryChapterCache } from '../cache/InMemoryChapterCache.js';
 import { RedisChapterCache } from '../cache/RedisChapterCache.js';
+import { ImageProcessor } from '../utils/ImageProcessor.js';
+import * as path from 'path';
+import * as fs from 'fs';
 
 export abstract class Channel {
     
@@ -46,6 +49,52 @@ export abstract class Channel {
     protected abstract fetchEpisodeList() : Promise<Chapter[]>;
 
     protected abstract fetchChapterData(identifier: string): Promise<Chapter>;
+    
+    /**
+     * Retorna la ruta del logo si existe, undefined si no
+     */
+    protected getLogoPath(): string | undefined {
+        return undefined;
+    }
+    
+    /**
+     * Retorna el color de fondo del badge
+     */
+    protected getBadgeColor(): string | undefined {
+        return undefined;
+    }
+    
+    /**
+     * Aplica watermark al imageUrl si existe logo configurado
+     */
+    protected async applyChannelWatermark(staticFilesPath: string, chapterUrlPrefix: string): Promise<void> {
+        const logoPath = this.getLogoPath();
+        const backgroundColor = this.getBadgeColor();
+        
+        if (!logoPath || !backgroundColor) {
+            return;
+        }
+        
+        const fullLogoPath = `${path.resolve('.')}/${logoPath}`;
+        if (!fs.existsSync(fullLogoPath)) {
+            console.warn(`Logo not found at ${fullLogoPath}, skipping watermark`);
+            return;
+        }
+        
+        const imageProcessor = new ImageProcessor(staticFilesPath, chapterUrlPrefix);
+        this.imageUrl = await imageProcessor.processChannelImage(
+            this.imageUrl,
+            this.constructor.name.replace('Channel', '').toLowerCase(),
+            this.channelName,
+            {
+                logoPath: fullLogoPath,
+                backgroundColor: backgroundColor,
+                badgeShape: 'blob',
+                badgeSize: 0.18
+            },
+            24
+        );
+    }
 
     public async generateFeed(): Promise<string | undefined> {
         console.info(`Creating rss feed.`);

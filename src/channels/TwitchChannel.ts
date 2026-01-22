@@ -11,7 +11,6 @@ import {PythonShell} from 'python-shell';
 import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
 import { ChapterCacheKey } from '../cache/IChapterCache.js';
-import { ImageProcessor } from '../utils/ImageProcessor.js';
 
 interface TwitchVideoData {
     id: string;
@@ -32,7 +31,8 @@ interface TwitchChannelData {
 
 export class TwitchChannel extends Channel{
 
-    private static LOGO_PATH : string = 'assets/twitch-logo.svg'
+    private static readonly LOGO_PATH: string = 'assets/twitch-logo.svg';
+    private static readonly BADGE_COLOR: string = '#9146FF';
     private static readonly TWITCH_REQUEST_OPTIONS = {
         headers: {
 //            'User-Agent': "Wget/version (linux-gnu)",
@@ -54,6 +54,14 @@ export class TwitchChannel extends Channel{
         this.username = channelName;
         this.staticFilesPath = staticFilesPath;
     }
+    
+    protected getLogoPath(): string | undefined {
+        return TwitchChannel.LOGO_PATH;
+    }
+    
+    protected getBadgeColor(): string | undefined {
+        return TwitchChannel.BADGE_COLOR;
+    }
 
     protected async fetchChannelInformation(): Promise<void> {
         const programUrl = `https://twitch.tv/${this.channelName}`;
@@ -69,24 +77,8 @@ export class TwitchChannel extends Channel{
         this.siteUrl = programUrl;
         this.link = programUrl;
         
-        // Procesar imagen con watermark de Twitch
-        const imageProcessor = new ImageProcessor(this.staticFilesPath, this.chapterUrlPrefix);
-        
-        // Buscar el logo de Twitch (SVG o PNG, desde directorio original)
-        let logoPath = `${path.resolve('.')}/${TwitchChannel.LOGO_PATH}`;
-        
-        this.imageUrl = await imageProcessor.processChannelImage(
-            this.imageUrl,
-            'twitch',
-            this.username,
-            {
-                logoPath: logoPath,
-                backgroundColor: '#9146FF', // Color morado oficial de Twitch
-                badgeShape: 'blob',
-                badgeSize: 0.18 // 18% del ancho de la imagen
-            },
-            24 // TTL de 24 horas para regenerar la imagen
-        );
+        // Aplicar watermark
+        await this.applyChannelWatermark(this.staticFilesPath, this.chapterUrlPrefix);
     }
 
     private async fetchAllVideosData(): Promise<TwitchVideoData[]> {

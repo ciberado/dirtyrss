@@ -5,9 +5,6 @@ import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
 import { performance } from 'perf_hooks';
 import { ChapterCacheKey } from '../cache/IChapterCache.js';
-import { ImageProcessor } from '../utils/ImageProcessor.js';
-import * as path from 'path';
-import * as fs from 'fs';
 
 export class IVooxChannel extends Channel {
 
@@ -25,6 +22,8 @@ export class IVooxChannel extends Channel {
     private static readonly EPISODE_IMAGE_SELECTOR:string = '.image-wrapper.pr-2 > picture > img';
 
     private static readonly LOGO_PATH: string = 'assets/ivoox-logo.svg';
+    private static readonly BADGE_COLOR: string = '#F76D0E';
+    
     private static readonly IVOOX_FETCH_TIMEOUT_MS:number = parseInt(process.env.IVOOX_FETCH_TIMEOUT_MS ?? "8000");
     private static readonly IVOOX_FETCH_PAGES_BATCH_SIZE:number = parseInt(process.env.IVOOX_FETCH_PAGES_BATCH_SIZE ?? "5");
     private static readonly IVOOX_MAX_REQUESTS_PER_SECOND:number = parseInt(process.env.IVOOX_MAX_CALLS_PER_SECOND ?? "90");
@@ -45,6 +44,14 @@ export class IVooxChannel extends Channel {
         super(channelName);
         this.chapterUrlPrefix = chapterUrlPrefix;
         this.staticFilesPath = staticFilesPath;
+    }
+    
+    protected getLogoPath(): string | undefined {
+        return IVooxChannel.LOGO_PATH;
+    }
+    
+    protected getBadgeColor(): string | undefined {
+        return IVooxChannel.BADGE_COLOR;
     }
 
     private fromSpanishDate(text: string): Date {
@@ -96,20 +103,8 @@ export class IVooxChannel extends Channel {
         this.siteUrl = this.channelUrl;
         this.link = this.channelUrl;
         
-        // Aplicar watermark de iVoox
-        const imageProcessor = new ImageProcessor(this.staticFilesPath, this.chapterUrlPrefix);
-        this.imageUrl = await imageProcessor.processChannelImage(
-            this.imageUrl,
-            'ivoox',
-            this.channelName,
-            {
-                logoPath: `${path.resolve('.')}/${IVooxChannel.LOGO_PATH}`,
-                backgroundColor: '#F76D0E',
-                badgeShape: 'blob',
-                badgeSize: 0.18
-            },
-            24
-        );
+        // Aplicar watermark
+        await this.applyChannelWatermark(this.staticFilesPath, this.chapterUrlPrefix);
     }
 
     protected async fetchEpisodeList(): Promise<Chapter[]> {
