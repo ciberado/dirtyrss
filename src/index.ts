@@ -7,6 +7,9 @@ import fastifyStatic from '@fastify/static';
 import { IVooxChannel } from './channels/IVooxChannel.js';
 import { TwitchChannel } from './channels/TwitchChannel.js';
 import { LavanguardiaChannel } from './channels/LavanguardiaChannel.js';
+import { YoutubeChannel } from './channels/YoutubeChannel.js';
+import { YoutubePlaylist } from './channels/YoutubePlaylist.js';
+import { YoutubeAudioDownloader } from './utils/YoutubeAudioDownloader.js';
 
 const FASTIFY_PORT = parseInt(process.env.PORT!) || 3000;
 
@@ -67,12 +70,169 @@ fastify.get('/health', async (req, reply) => {
     });
 });
 
+interface YoutubeChannelParamType {
+    channelId: string;
+}
+
+interface YoutubePlaylistParamType {
+    playlistId: string;
+}
+
+interface YoutubeChannelAudioParamType {
+    channelId: string;
+    videoId: string;
+}
+
+interface YoutubePlaylistAudioParamType {
+    playlistId: string;
+    videoId: string;
+}
+
+fastify.get<{Params : YoutubeChannelParamType}>('/youtube/channel/:channelId', async (req, reply) => {
+    try {
+        const defaultPort = req.protocol === 'https' ? 443 : 80;
+        const port = req.port || defaultPort;
+        const portSuffix = (port === 80 && req.protocol === 'http') || (port === 443 && req.protocol === 'https') ? '' : `:${port}`;
+        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}${portSuffix}`;
+        
+        const yc = new YoutubeChannel(req.params.channelId, chapterUrlPrefix, FASTIFY_STATIC);
+        const xmlFeed = await yc.generateFeed();
+        
+        if (xmlFeed === undefined) {
+            reply.code(404).type('text/html').send(`YouTube channel ${req.params.channelId} not found.`);
+        } else {
+            reply.send(xmlFeed);
+        }
+    } catch (err) {
+        console.warn(err);
+        reply.code(500).send(`Error: ${err}`);
+    }
+});
+
+fastify.get<{Params : YoutubePlaylistParamType}>('/youtube/playlist/:playlistId', async (req, reply) => {
+    try {
+        const defaultPort = req.protocol === 'https' ? 443 : 80;
+        const port = req.port || defaultPort;
+        const portSuffix = (port === 80 && req.protocol === 'http') || (port === 443 && req.protocol === 'https') ? '' : `:${port}`;
+        const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}${portSuffix}`;
+        
+        const yp = new YoutubePlaylist(req.params.playlistId, chapterUrlPrefix, FASTIFY_STATIC);
+        const xmlFeed = await yp.generateFeed();
+        
+        if (xmlFeed === undefined) {
+            reply.code(404).type('text/html').send(`YouTube playlist ${req.params.playlistId} not found.`);
+        } else {
+            reply.send(xmlFeed);
+        }
+    } catch (err) {
+        console.warn(err);
+        reply.code(500).send(`Error: ${err}`);
+    }
+});
+
+// Endpoint para servir audio de YouTube (canal)
+fastify.get<{Params : YoutubeChannelAudioParamType}>('/youtube/channel/:channelId/:videoId.m4a', async (req, reply) => {
+    try {
+        const { videoId } = req.params;
+        const audioDir = path.join(FASTIFY_STATIC, 'youtube-audio');
+        
+        const fileName = YoutubeAudioDownloader.getFileNameForVideo(audioDir, videoId);
+        
+        if (!fileName) {
+            console.info(`[YOUTUBE AUDIO] Video ${videoId} not ready yet, triggering download`);
+            YoutubeAudioDownloader.downloadInBackground(videoId, audioDir);
+            return reply.code(503).type('text/html').send(`Video ${videoId} is being downloaded. Please try again in a few minutes.`);
+        }
+        
+        // Servir el archivo con soporte de range requests
+        const stat = fs.statSync(fileName);
+        const fileSize = stat.size;
+        const range = req.headers.range;
+        
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunkSize = (end - start) + 1;
+            const stream = fs.createReadStream(fileName, { start, end });
+            
+            reply
+                .code(206)
+                .header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+                .header('Accept-Ranges', 'bytes')
+                .header('Content-Length', chunkSize)
+                .header('Content-Type', 'audio/mp4');
+            
+            return reply.send(stream);
+        } else {
+            reply
+                .header('Content-Type', 'audio/mp4')
+                .header('Content-Length', fileSize)
+                .header('Accept-Ranges', 'bytes');
+            
+            const stream = fs.createReadStream(fileName);
+            return reply.send(stream);
+        }
+    } catch (err) {
+        console.error(err);
+        reply.code(500).send(`Error serving audio: ${err}`);
+    }
+});
+
+// Endpoint para servir audio de YouTube (playlist)
+fastify.get<{Params : YoutubePlaylistAudioParamType}>('/youtube/playlist/:playlistId/:videoId.m4a', async (req, reply) => {
+    try {
+        const { videoId } = req.params;
+        const audioDir = path.join(FASTIFY_STATIC, 'youtube-audio');
+        
+        const fileName = YoutubeAudioDownloader.getFileNameForVideo(audioDir, videoId);
+        
+        if (!fileName) {
+            console.info(`[YOUTUBE AUDIO] Video ${videoId} not ready yet, triggering download`);
+            YoutubeAudioDownloader.downloadInBackground(videoId, audioDir);
+            return reply.code(503).type('text/html').send(`Video ${videoId} is being downloaded. Please try again in a few minutes.`);
+        }
+        
+        // Servir el archivo con soporte de range requests
+        const stat = fs.statSync(fileName);
+        const fileSize = stat.size;
+        const range = req.headers.range;
+        
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunkSize = (end - start) + 1;
+            const stream = fs.createReadStream(fileName, { start, end });
+            
+            reply
+                .code(206)
+                .header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+                .header('Accept-Ranges', 'bytes')
+                .header('Content-Length', chunkSize)
+                .header('Content-Type', 'audio/mp4');
+            
+            return reply.send(stream);
+        } else {
+            reply
+                .header('Content-Type', 'audio/mp4')
+                .header('Content-Length', fileSize)
+                .header('Accept-Ranges', 'bytes');
+            
+            const stream = fs.createReadStream(fileName);
+            return reply.send(stream);
+        }
+    } catch (err) {
+        console.error(err);
+        reply.code(500).send(`Error serving audio: ${err}`);
+    }
+});
+
 interface LavanguardiaParamType {
     author : string;
 }
 
-
-fastify.get<{ Params: LavanguardiaParamType }>('/lavanguardia/:author', async (req, reply) => {
+fastify.get<{Params : LavanguardiaParamType}>('/lavanguardia/:author', async (req, reply) => {
     try {
         const lvc = new LavanguardiaChannel(req.params.author);
         const xmlFeed = await lvc.generateFeed();
