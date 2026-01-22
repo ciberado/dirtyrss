@@ -34,13 +34,17 @@ compose-remove-volumes:
 	docker volume prune -f
 
 compose-clear-cache:
-	@echo "Borrando imágenes JPG procesadas..."
-	docker compose exec dirtyrss find /tmp/public -type f -name "*.jpg" -delete
-	@echo "Borrando feeds cacheados en Redis..."
-	@echo "Keys encontradas:"
-	@docker compose exec redis redis-cli --scan --pattern "chapter:list:feed:*"
-	@echo "Borrando..."
-	@docker compose exec redis sh -c 'redis-cli --scan --pattern "chapter:list:feed:*" | while read key; do redis-cli DEL "$$key"; done'
-	@echo "Cache limpiado"
+	@if docker compose ps | grep -q "Up"; then \
+		echo "Borrando imágenes JPG procesadas..."; \
+		docker compose exec dirtyrss find /tmp/public -type f -name "*.jpg" -delete; \
+		echo "Borrando feeds cacheados en Redis..."; \
+		echo "Keys encontradas:"; \
+		docker compose exec redis redis-cli --scan --pattern "chapter:list:feed:*"; \
+		echo "Borrando..."; \
+		docker compose exec redis sh -c 'redis-cli --scan --pattern "chapter:list:feed:*" | while read key; do redis-cli DEL "$$key"; done'; \
+		echo "Cache limpiado"; \
+	else \
+		echo "Los contenedores no están en ejecución. Saltando limpieza de cache."; \
+	fi
 
 compose-up: compose-clear-cache compose-clean compose-build compose-up-redis

@@ -13,7 +13,7 @@ FROM node:25-alpine
 
 WORKDIR /app
 
-RUN apk add --no-cache ffmpeg python3 py3-pip && \
+RUN apk add --no-cache ffmpeg python3 py3-pip deno && \
     pip3 install --break-system-packages --no-cache-dir 'httpcore[asyncio]'
 
 COPY --from=builder /app/package*.json ./
