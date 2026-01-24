@@ -125,20 +125,22 @@ export abstract class Channel {
             }
         });
 
+        // Ajustar pubDate para mantener orden decreciente coherente
+        let previousPubDate: Date | null = null;
+        
         chapters.forEach(c => {
-            // Ajustar pubDate basado en playlist_index para forzar ordenamiento correcto
-            // Restar segundos del playlist_index para que episodios con index más bajo tengan timestamps más altos
-            let adjustedDate = new Date(c.date);
-            if (c.playlistIndex !== undefined) {
-                // Restar (playlist_index - 1) segundos para mantener el orden
-                // Index 1 = original, Index 2 = -1 segundo, Index 3 = -2 segundos, etc.
-                const secondsToSubtract = c.playlistIndex - 1;
-                adjustedDate = new Date(c.date.getTime() - (secondsToSubtract * 1000));
+            let pubDate = new Date(c.date);
+            
+            // Si la fecha es igual o posterior a la anterior, restar 1 hora
+            if (previousPubDate !== null && pubDate.getTime() >= previousPubDate.getTime()) {
+                pubDate = new Date(previousPubDate.getTime() - (60 * 60 * 1000)); // -1 hora
             }
+            
+            previousPubDate = pubDate;
             
             feed.addItem({
                 title: c.title,
-                date: adjustedDate.toUTCString(),
+                date: pubDate.toUTCString(),
                 description: c.description,
                 imageUrl: c.image,
                 itunesImage : c.image,
