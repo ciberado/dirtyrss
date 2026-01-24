@@ -223,14 +223,23 @@ export class YoutubePlaylist extends Channel {
                             timeoutPromise
                         ]) as PromiseSettledResult<Chapter>[];
                         
-                        // Filtrar solo los exitosos y logear los fallidos
-                        for (const result of batchResults) {
-                            if (result.status === 'fulfilled') {
-                                collectedChapters.push(result.value);
-                            } else {
-                                console.error(`Error fetching video: ${result.reason}`);
-                            }
+                        // Mapear resultados al índice original para preservar el orden
+                        const chaptersWithIndex = batchResults
+                            .map((result, batchIdx) => ({ result, originalIndex: i + batchIdx }))
+                            .filter(item => item.result.status === 'fulfilled')
+                            .sort((a, b) => a.originalIndex - b.originalIndex);
+                        
+                        // Agregar en orden
+                        for (const item of chaptersWithIndex) {
+                            collectedChapters.push((item.result as PromiseFulfilledResult<Chapter>).value);
                         }
+                        
+                        // Logear los fallidos
+                        batchResults.forEach((result, batchIdx) => {
+                            if (result.status === 'rejected') {
+                                console.error(`Error fetching video at index ${i + batchIdx}: ${result.reason}`);
+                            }
+                        });
                     } catch (error) {
                         if (timeoutReached && collectedChapters.length < videoIds.length) {
                             const remainingIds = videoIds.slice(i + batch.length);
@@ -340,11 +349,17 @@ export class YoutubePlaylist extends Channel {
             const audioDir = `${this.staticFilesPath}/youtube-audio`;
             const audioSize = await YoutubeAudioDownloader.getAudioSize(video.id, audioDir);
             
+            // Agregar link del video al final de la descripción
+            const videoUrl = `https://www.youtube.com/watch?v=${video.id}`;
+            const descriptionWithLink = video.description 
+                ? `${video.description}\n\n${videoUrl}`
+                : videoUrl;
+            
             const chapter = new Chapter(
                 video.id,
                 video.title,
                 `${this.chapterUrlPrefix}/youtube/playlist/${this.playlistId}/${video.id}.m4a`,
-                video.description,
+                descriptionWithLink,
                 this.parseDate(video.upload_date),
                 video.thumbnail,
                 this.formatDuration(video.duration),

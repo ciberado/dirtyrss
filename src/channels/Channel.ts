@@ -10,7 +10,7 @@ import * as fs from 'fs';
 
 export abstract class Channel {
     
-    protected static chapterCache: IChapterCache;
+    public static chapterCache: IChapterCache;
     protected static cacheInitialized: boolean = false;
 
     protected channelName: string;

@@ -10,6 +10,8 @@ import { LavanguardiaChannel } from './channels/LavanguardiaChannel.js';
 import { YoutubeChannel } from './channels/YoutubeChannel.js';
 import { YoutubePlaylist } from './channels/YoutubePlaylist.js';
 import { YoutubeAudioDownloader } from './utils/YoutubeAudioDownloader.js';
+import { Channel } from './channels/Channel.js';
+import { ChapterCacheKey } from './cache/IChapterCache.js';
 
 const FASTIFY_PORT = parseInt(process.env.PORT!) || 3000;
 
@@ -21,6 +23,24 @@ fse.copySync(PUBLIC_ASSETS_DIRECTORY, `${FASTIFY_STATIC}/assets`);
 const fastify = Fastify({
     trustProxy: true
 });
+
+/**
+ * Helper para loguear información del capítulo desde caché cuando se intenta descargar
+ */
+async function logChapterDownloadAttempt(platform: string, showId: string, episodeId: string): Promise<void> {
+    try {
+        const cacheKey = ChapterCacheKey.forChapter(platform, showId, episodeId);
+        const cachedChapter = await Channel.chapterCache.get(cacheKey);
+        
+        if (cachedChapter) {
+            console.log(`[DOWNLOAD ATTEMPT] Cache key: ${cacheKey} | Title: "${cachedChapter.title}"`);
+        } else {
+            console.log(`[DOWNLOAD ATTEMPT] Cache key: ${cacheKey} | (not in cache)`);
+        }
+    } catch (error) {
+        console.error(`[DOWNLOAD ATTEMPT] Error reading cache for ${platform}:${showId}:${episodeId}:`, error);
+    }
+}
 
 // Memory monitoring hook
 fastify.addHook('onResponse', (req, reply, done) => {
@@ -133,8 +153,11 @@ fastify.get<{Params : YoutubePlaylistParamType}>('/youtube/playlist/:playlistId'
 // Endpoint para servir audio de YouTube (canal)
 fastify.get<{Params : YoutubeChannelAudioParamType}>('/youtube/channel/:channelId/:videoId.m4a', async (req, reply) => {
     try {
-        const { videoId } = req.params;
+        const { channelId, videoId } = req.params;
         const audioDir = path.join(FASTIFY_STATIC, 'youtube-audio');
+        
+        // Log del intento de descarga con información de caché
+        await logChapterDownloadAttempt('youtube', channelId, videoId);
         
         const fileName = YoutubeAudioDownloader.getFileNameForVideo(audioDir, videoId);
         
@@ -182,8 +205,11 @@ fastify.get<{Params : YoutubeChannelAudioParamType}>('/youtube/channel/:channelI
 // Endpoint para servir audio de YouTube (playlist)
 fastify.get<{Params : YoutubePlaylistAudioParamType}>('/youtube/playlist/:playlistId/:videoId.m4a', async (req, reply) => {
     try {
-        const { videoId } = req.params;
+        const { playlistId, videoId } = req.params;
         const audioDir = path.join(FASTIFY_STATIC, 'youtube-audio');
+        
+        // Log del intento de descarga con información de caché
+        await logChapterDownloadAttempt('youtube-playlist', playlistId, videoId);
         
         const fileName = YoutubeAudioDownloader.getFileNameForVideo(audioDir, videoId);
         
@@ -268,18 +294,23 @@ fastify.get<{Params : TwitchParamType}>('/twitch/:showId', async (req, reply) =>
 
 fastify.get<{Params : TwitchParamType}>('/twitch/chapters/:showId/:episodeId.m4a', async (req, reply) => {
     try {
+        const { showId, episodeId } = req.params;
         const defaultPort = req.protocol === 'https' ? 443 : 80;
         const port = req.port || defaultPort;
         const portSuffix = (port === 80 && req.protocol === 'http') || (port === 443 && req.protocol === 'https') ? '' : `:${port}`;
         console.info(`[REQUEST] ${req.method} ${req.protocol}://${req.hostname}${portSuffix}${req.url}`);
         const chapterUrlPrefix = process.env.EPISODE_PREFIX || `${req.protocol}://${req.hostname}${portSuffix}`;
-        const tc = new TwitchChannel(req.params.showId, chapterUrlPrefix, FASTIFY_STATIC);
-        const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, req.params.episodeId);
+        
+        // Log del intento de descarga con información de caché
+        await logChapterDownloadAttempt('twitch', showId, episodeId);
+        
+        const tc = new TwitchChannel(showId, chapterUrlPrefix, FASTIFY_STATIC);
+        const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, episodeId);
         console.info("File name", fileName);
         
         if (!fileName) {
-            console.info(`Episode ${req.params.episodeId} not ready yet, triggering download`);
-            return reply.code(503).type('text/html').send(`Episode ${req.params.episodeId} is being downloaded. Please try again in a few minutes.`);
+            console.info(`Episode ${episodeId} not ready yet, triggering download`);
+            return reply.code(503).type('text/html').send(`Episode ${episodeId} is being downloaded. Please try again in a few minutes.`);
         }
         
         const stat = fs.statSync(fileName);
