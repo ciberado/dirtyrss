@@ -5,6 +5,8 @@ import { ExternalTools } from '../utils/ExternalTools.js';
 import { YoutubeAudioDownloader } from '../utils/YoutubeAudioDownloader.js';
 import { YtDlpQueue } from '../utils/YtDlpQueue.js';
 import { performance } from 'perf_hooks';
+import { default as got } from 'got';
+import * as cheerio from 'cheerio';
 
 interface YoutubeVideoData {
     id: string;
@@ -56,6 +58,10 @@ export class YoutubeChannel extends Channel {
         console.info(`Configuring feed for ${this.channelUrl}`);
         
         try {
+            // Obtener la imagen del canal desde la página web
+            const channelImage = await this.getChannelImage();
+            
+            // Obtener metadata básica del primer video
             const stdout = await YtDlpQueue.exec(
                 `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.channelUrl}/videos"`
             );
@@ -65,7 +71,7 @@ export class YoutubeChannel extends Channel {
             this.channelName = videoData.channel;
             this.author = videoData.channel;
             this.description = `Videos from ${videoData.channel}`;
-            this.imageUrl = videoData.thumbnail;
+            this.imageUrl = channelImage;
             this.ttlInMinutes = 60;
             this.siteUrl = this.channelUrl;
             this.link = this.channelUrl;
@@ -74,6 +80,38 @@ export class YoutubeChannel extends Channel {
         } catch (err) {
             console.error(`Error fetching YouTube channel info: ${err}`);
             throw err;
+        }
+    }
+    
+    /**
+     * Obtiene la imagen del canal desde la página web de YouTube
+     */
+    private async getChannelImage(): Promise<string> {
+        try {
+            const response = await got(`${this.channelUrl}/videos`);
+            const $ = cheerio.load(response.body);
+            
+            // Intentar obtener desde meta tag og:image (imagen del canal)
+            const ogImage = $('meta[property="og:image"]').attr('content');
+            if (ogImage) {
+                console.log(`Channel image from og:image: ${ogImage}`);
+                return ogImage;
+            }
+            
+            // Fallback: buscar en el JSON de la página
+            const match = response.body.match(/"avatar":\{"thumbnails":\[\{"url":"([^"]+)"/);
+            if (match && match[1]) {
+                console.log(`Channel image from JSON: ${match[1]}`);
+                return match[1];
+            }
+            
+            // Fallback final: imagen por defecto de YouTube
+            console.warn(`Could not find channel image, using default`);
+            return `https://yt3.googleusercontent.com/ytc/${this.channelId}=s900-c-k-c0x00ffffff-no-rj`;
+        } catch (error) {
+            console.error(`Error getting channel image: ${error}`);
+            // Fallback: imagen por defecto
+            return `https://yt3.googleusercontent.com/ytc/${this.channelId}=s900-c-k-c0x00ffffff-no-rj`;
         }
     }
 
