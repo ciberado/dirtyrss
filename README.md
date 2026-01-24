@@ -59,30 +59,40 @@ npm run start
 
 Nota: Probablemente no querrás utilizar el puerto 80 a menos que tu red sea de confianza.
 
-### Ejecución rápida con imagen publicada
+### Requisitos previos
 
+Asegúrate de tener instalado:
+- Docker
+- Docker Compose
+- Make
+
+En Ubuntu/Debian:
 ```bash
-docker run -p 80:3000 ciberado/dirtyrss
+sudo apt-get install make
+```
+
+En macOS (con Homebrew):
+```bash
+brew install make
 ```
 
 ### Ejecución con Docker Compose (recomendado)
 
 ```bash
-# Construir y arrancar (sin Redis)
-make compose-build
+# Construir, limpiar caché y arrancar con Redis (caché persistente)
 make compose-up
 
-# O construir y arrancar con Redis (caché persistente)
-make all
-
-# Ver logs
+# Ver logs en tiempo real
 make compose-logs
 
-# Detener
+# Reiniciar contenedores
+make compose-restart
+
+# Detener contenedores (preserva volúmenes/caché)
 make compose-down
 
-# Limpiar volúmenes y contenedores
-make compose-clean
+# Limpieza completa (elimina volúmenes y caché)
+make compose-remove-volumes
 ```
 
 ### Variables de entorno
@@ -103,15 +113,16 @@ environment:
 
 ### Comandos disponibles en Makefile
 
-- `make compose-build` - Construir la imagen
-- `make compose-up` - Arrancar sin Redis
-- `make compose-up-redis` - Arrancar con Redis
-- `make compose-down` - Detener contenedores
+- `make compose-up` - Limpiar caché, detener, construir y arrancar con Redis (comando principal)
+- `make compose-build` - Construir la imagen Docker
+- `make compose-up-memory` - Arrancar sin Redis (solo caché en memoria)
+- `make compose-up-redis` - Arrancar con Redis (caché persistente)
+- `make compose-down` - Detener todos los contenedores
 - `make compose-logs` - Ver logs en tiempo real
-- `make compose-restart` - Reiniciar contenedores
-- `make compose-clean` - Detener contenedores (preserva volúmenes/caché)
+- `make compose-restart` - Reiniciar contenedores sin reconstruir
+- `make compose-clean` - Detener contenedores (preserva volúmenes)
 - `make compose-remove-volumes` - Detener y eliminar volúmenes (limpieza completa)
-- `make all` - Detener, construir y arrancar con Redis (preserva caché)
+- `make compose-clear-cache` - Borrar imágenes procesadas y feeds cacheados en Redis
 
 ## Obteniendo feeds
 
