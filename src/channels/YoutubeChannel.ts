@@ -196,23 +196,14 @@ export class YoutubeChannel extends Channel {
                             timeoutPromise
                         ]) as PromiseSettledResult<Chapter>[];
                         
-                        // Mapear resultados al índice original para preservar el orden
-                        const chaptersWithIndex = batchResults
-                            .map((result, batchIdx) => ({ result, originalIndex: i + batchIdx }))
-                            .filter(item => item.result.status === 'fulfilled')
-                            .sort((a, b) => a.originalIndex - b.originalIndex);
-                        
-                        // Agregar en orden
-                        for (const item of chaptersWithIndex) {
-                            collectedChapters.push((item.result as PromiseFulfilledResult<Chapter>).value);
-                        }
-                        
-                        // Logear los fallidos
-                        batchResults.forEach((result, batchIdx) => {
-                            if (result.status === 'rejected') {
-                                console.error(`Error fetching video at index ${i + batchIdx}: ${result.reason}`);
+                        // Filtrar solo los exitosos y logear los fallidos
+                        for (const result of batchResults) {
+                            if (result.status === 'fulfilled') {
+                                collectedChapters.push(result.value);
+                            } else {
+                                console.error(`Error fetching video: ${result.reason}`);
                             }
-                        });
+                        }
                     } catch (error) {
                         if (timeoutReached && collectedChapters.length < videoIds.length) {
                             const remainingIds = videoIds.slice(i + batch.length);
@@ -230,6 +221,9 @@ export class YoutubeChannel extends Channel {
                     throw error;
                 }
             }
+            
+            // Ordenar por fecha de publicación (más reciente primero)
+            collectedChapters.sort((a, b) => b.date.getTime() - a.date.getTime());
             
             // Guardar en caché solo si cargamos todo
             if (!hasBackgroundLoading && firstVideo && collectedChapters.length > 0) {
@@ -291,6 +285,9 @@ export class YoutubeChannel extends Channel {
             const endTime = performance.now();
             console.log(`Background fetch completed. Total chapters: ${chapters.length}`);
             console.log(`Background fetch completed in ${(endTime - startTime).toFixed(2)}ms`);
+            
+            // Ordenar por fecha de publicación (más reciente primero)
+            chapters.sort((a, b) => b.date.getTime() - a.date.getTime());
             
             // Cachear la lista completa
             if (firstVideo && chapters.length > 0) {
