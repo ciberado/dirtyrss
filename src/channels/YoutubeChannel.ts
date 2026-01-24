@@ -36,7 +36,10 @@ export class YoutubeChannel extends Channel {
     constructor(channelId: string, chapterUrlPrefix: string = '', staticFilesPath: string = '/tmp/public') {
         super(channelId);
         this.channelId = channelId;
-        this.channelUrl = `https://www.youtube.com/channel/${channelId}`;
+        // Soportar tanto handles (@nombre) como channel IDs (UC...)
+        this.channelUrl = channelId.startsWith('@') 
+            ? `https://www.youtube.com/${channelId}`
+            : `https://www.youtube.com/channel/${channelId}`;
         this.chapterUrlPrefix = chapterUrlPrefix;
         this.staticFilesPath = staticFilesPath;
     }

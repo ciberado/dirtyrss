@@ -116,12 +116,24 @@ environment:
 ## Obteniendo feeds
 
 Invoca la dirección del servidor en el que estás ejecutando *DirtyRSS* pasando el nombre del programa que
-quieres escuchar como parámetro `podcast`. Por ejemplo:
+quieres escuchar como parámetro. Por ejemplo:
 
 ```bash
+# iVoox
 http://<IP DE TU SERVIDOR>/ivoox/todopoderosos
+
+# Twitch
 http://<IP DE TU SERVIDOR>/twitch/srevolution
+
+# La Vanguardia
 http://<IP DE TU SERVIDOR>/lavanguardia/enric-juliana
+
+# YouTube - Canal (soporta handles con @ y channel IDs)
+http://<IP DE TU SERVIDOR>/youtube/channel/@filosofiaaquiyahora9169
+http://<IP DE TU SERVIDOR>/youtube/channel/UC1234567890abcdef
+
+# YouTube - Playlist
+http://<IP DE TU SERVIDOR>/youtube/playlist/PLxxxxxxxxxxxxxx
 ```
 
 Obtendrás el feed RSS correspondiente. Ahora solo tienes que compartirlo con tu podcatcher o lector de RSS.
