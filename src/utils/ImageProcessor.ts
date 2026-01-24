@@ -76,14 +76,14 @@ export class ImageProcessor {
             console.log(`Processing channel image for ${platformName}/${channelId}`);
             const response = await got(originalImageUrl).buffer();
             
-            // Convertir imagen a cuadrada (recortar desde el centro)
+            // Convertir imagen a cuadrada (añadir padding arriba/abajo o izq/der según sea necesario)
             const metadata = await sharp(response).metadata();
-            const minDimension = Math.min(metadata.width || 300, metadata.height || 300);
+            const maxDimension = Math.max(metadata.width || 300, metadata.height || 300);
             
             const squareImageBuffer = await sharp(response)
-                .resize(minDimension, minDimension, {
-                    fit: 'cover',
-                    position: 'center'
+                .resize(maxDimension, maxDimension, {
+                    fit: 'contain',
+                    background: { r: 0, g: 0, b: 0, alpha: 1 }  // Fondo negro
                 })
                 .toBuffer();
             
@@ -95,7 +95,7 @@ export class ImageProcessor {
             }
             
             // Procesar imagen con watermark
-            const badgeSize = Math.floor(minDimension * config.badgeSize);
+            const badgeSize = Math.floor(maxDimension * config.badgeSize);
             
             // Crear el badge según la forma configurada
             const badgeBuffer = await this.createBadge(config, badgeSize);
@@ -112,7 +112,7 @@ export class ImageProcessor {
                 .composite([{
                     input: trimmedBadge,
                     top: 0,
-                    left: minDimension - trimmedMetadata.width!
+                    left: maxDimension - trimmedMetadata.width!
                 }])
                 .jpeg({ quality: 90 })
                 .toFile(processedImagePath);
