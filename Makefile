@@ -56,15 +56,19 @@ compose-clear-keys:
 		echo "Buscando keys con patrón: $(PATTERN)"; \
 		docker compose exec redis redis-cli --raw KEYS "$(PATTERN)" | head -10; \
 		echo "..."; \
-		TOTAL=$$(docker compose exec redis redis-cli --raw KEYS "$(PATTERN)" | wc -l); \
+		TOTAL=$$(docker compose exec redis redis-cli --raw KEYS "$(PATTERN)" | grep -v '^$$' | wc -l); \
 		echo "Total de keys encontradas: $$TOTAL"; \
-		read -p "¿Confirmar borrado? (y/N): " confirm; \
-		if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
-			echo "Borrando keys..."; \
-			docker compose exec redis redis-cli --raw KEYS "$(PATTERN)" | xargs -I {} docker exec dirtyrss-redis redis-cli DEL {}; \
-			echo "Keys borradas correctamente"; \
+		if [ "$$TOTAL" -eq 0 ]; then \
+			echo "No se encontraron keys para borrar."; \
 		else \
-			echo "Operación cancelada"; \
+			read -p "¿Confirmar borrado? (y/N): " confirm; \
+			if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
+				echo "Borrando keys..."; \
+				docker compose exec redis redis-cli --raw KEYS "$(PATTERN)" | xargs -I {} docker exec dirtyrss-redis redis-cli DEL {}; \
+				echo "Keys borradas correctamente"; \
+			else \
+				echo "Operación cancelada"; \
+			fi \
 		fi \
 	else \
 		echo "Los contenedores no están en ejecución."; \
