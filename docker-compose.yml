@@ -35,6 +35,7 @@ services:
       - PORT=3000
       - CACHE_TYPE=redis
       - REDIS_ADDRESS=redis:6379
+      - YTDLP_MAX_CONCURRENT=15
     volumes:
       - dirtyrss-data:/tmp/public
     profiles:

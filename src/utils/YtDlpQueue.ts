@@ -16,7 +16,7 @@ interface QueueItem {
  * decenas de procesos yt-dlp simultáneamente, consumiendo recursos.
  */
 export class YtDlpQueue {
-    private static readonly MAX_CONCURRENT = 3; // Máximo de comandos yt-dlp concurrentes
+    private static readonly MAX_CONCURRENT = parseInt(process.env.YTDLP_MAX_CONCURRENT || '10');
     private static queue: QueueItem[] = [];
     private static running = 0;
 

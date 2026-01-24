@@ -85,6 +85,22 @@ make compose-down
 make compose-clean
 ```
 
+### Variables de entorno
+
+Puedes configurar DirtyRSS mediante variables de entorno en el `docker-compose.yml`:
+
+- `PORT` - Puerto del servidor (default: 3000)
+- `CACHE_TYPE` - Tipo de caché: `redis` o `memory` (default: memory)
+- `REDIS_ADDRESS` - Dirección del servidor Redis (default: redis:6379)
+- `YTDLP_MAX_CONCURRENT` - Número máximo de procesos yt-dlp concurrentes (default: 10)
+
+Ejemplo para ajustar la concurrencia de yt-dlp:
+
+```yaml
+environment:
+  - YTDLP_MAX_CONCURRENT=5  # Reduce la concurrencia para servidores con menos recursos
+```
+
 ### Comandos disponibles en Makefile
 
 - `make compose-build` - Construir la imagen
