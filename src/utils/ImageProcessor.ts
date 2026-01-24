@@ -87,14 +87,14 @@ export class ImageProcessor {
                 })
                 .toBuffer();
             
-            // Verificar si existe el logo
+            // Si no existe el logo, guardar solo la imagen cuadrada
             if (!fs.existsSync(config.logoPath)) {
                 console.warn(`Logo not found at ${config.logoPath}, skipping watermark`);
                 await sharp(squareImageBuffer).jpeg({ quality: 90 }).toFile(processedImagePath);
                 return `${this.chapterUrlPrefix}/${platformName}/covers/${sanitizedChannelId}_${timestamp}.jpg`;
             }
             
-            // Procesar imagen con watermark
+            // Procesar watermark sobre la imagen cuadrada
             const badgeSize = Math.floor(maxDimension * config.badgeSize);
             
             // Crear el badge según la forma configurada
@@ -107,7 +107,7 @@ export class ImageProcessor {
             
             const trimmedMetadata = await sharp(trimmedBadge).metadata();
             
-            // Componer el badge pegado a los bordes superior y derecho
+            // Componer el badge sobre la imagen cuadrada, pegado a los bordes superior y derecho
             await sharp(squareImageBuffer)
                 .composite([{
                     input: trimmedBadge,
