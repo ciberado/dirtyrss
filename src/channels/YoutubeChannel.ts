@@ -1,13 +1,10 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
 import { ChapterCacheKey } from '../cache/IChapterCache.js';
 import { ExternalTools } from '../utils/ExternalTools.js';
 import { YoutubeAudioDownloader } from '../utils/YoutubeAudioDownloader.js';
+import { YtDlpQueue } from '../utils/YtDlpQueue.js';
 import { performance } from 'perf_hooks';
-
-const execAsync = promisify(exec);
 
 interface YoutubeVideoData {
     id: string;
@@ -56,9 +53,8 @@ export class YoutubeChannel extends Channel {
         console.info(`Configuring feed for ${this.channelUrl}`);
         
         try {
-            const { stdout } = await execAsync(
-                `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.channelUrl}/videos"`,
-                { maxBuffer: 50 * 1024 * 1024 } // 50MB
+            const stdout = await YtDlpQueue.exec(
+                `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.channelUrl}/videos"`
             );
             
             const videoData: YoutubeVideoData = JSON.parse(stdout.split('\n')[0]);
@@ -129,10 +125,9 @@ export class YoutubeChannel extends Channel {
                 }
             }
             
-            // Obtener lista de IDs
-            const { stdout } = await execAsync(
-                `${YoutubeChannel.ytDlpPath} --flat-playlist --print "%(id)s" "${this.channelUrl}/videos"`,
-                { maxBuffer: 10 * 1024 * 1024 }
+            // Obtener lista de IDs usando la cola
+            const stdout = await YtDlpQueue.exec(
+                `${YoutubeChannel.ytDlpPath} --flat-playlist --print "%(id)s" "${this.channelUrl}/videos"`
             );
             
             const videoIds = stdout.split('\n').filter(line => line.trim());
@@ -208,9 +203,8 @@ export class YoutubeChannel extends Channel {
     
     private async getFirstVideo(): Promise<{ id: string, title: string } | undefined> {
         try {
-            const { stdout } = await execAsync(
-                `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.channelUrl}/videos"`,
-                { maxBuffer: 50 * 1024 * 1024 }
+            const stdout = await YtDlpQueue.exec(
+                `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.channelUrl}/videos"`
             );
             
             const video: YoutubeVideoData = JSON.parse(stdout.split('\n')[0]);
@@ -268,9 +262,8 @@ export class YoutubeChannel extends Channel {
         }
         
         try {
-            const { stdout } = await execAsync(
-                `${YoutubeChannel.ytDlpPath} --dump-json "https://www.youtube.com/watch?v=${id}"`,
-                { maxBuffer: 50 * 1024 * 1024 } // 50MB
+            const stdout = await YtDlpQueue.exec(
+                `${YoutubeChannel.ytDlpPath} --dump-json "https://www.youtube.com/watch?v=${id}"`
             );
             
             const video: YoutubeVideoData = JSON.parse(stdout);

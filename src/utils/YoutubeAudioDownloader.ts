@@ -1,11 +1,8 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import { YoutubeChannel } from '../channels/YoutubeChannel.js';
+import { YtDlpQueue } from './YtDlpQueue.js';
 import { default as got } from 'got';
-
-const execAsync = promisify(exec);
 
 interface AudioStreamResult {
     type: 'file';
@@ -75,9 +72,10 @@ export class YoutubeAudioDownloader {
             console.log(`[YOUTUBE AUDIO] Command: ${YoutubeChannel.ytDlpPath} -f "bestaudio[ext=m4a]" -o "${tempPath}" "https://www.youtube.com/watch?v=${videoId}"`);
             
             // Descarga solo m4a DASH (sin conversión con ffmpeg, mucho más rápido)
-            const { stdout, stderr } = await execAsync(
+            // Usando la cola global para evitar sobrecarga
+            const stdout = await YtDlpQueue.exec(
                 `${YoutubeChannel.ytDlpPath} -f "bestaudio[ext=m4a]" -o "${tempPath}" "https://www.youtube.com/watch?v=${videoId}"`,
-                { maxBuffer: 100 * 1024 * 1024 }
+                100 * 1024 * 1024
             );
             
             /* CODIGO DE CONVERSION COMENTADO (por si hay que volver atrás)
@@ -94,7 +92,6 @@ export class YoutubeAudioDownloader {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
             console.log(`[YOUTUBE AUDIO] Download completed in ${elapsed}s at ${tempPath}`);
             if (stdout) console.log(`[YOUTUBE AUDIO] stdout: ${stdout.substring(0, 500)}`);
-            if (stderr) console.log(`[YOUTUBE AUDIO] stderr: ${stderr.substring(0, 500)}`);
             
             // Mover archivo temporal al nombre final (operación atómica)
             fs.renameSync(tempPath, outputPath);
