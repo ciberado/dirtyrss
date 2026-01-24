@@ -76,16 +76,26 @@ export class ImageProcessor {
             console.log(`Processing channel image for ${platformName}/${channelId}`);
             const response = await got(originalImageUrl).buffer();
             
+            // Convertir imagen a cuadrada (recortar desde el centro)
+            const metadata = await sharp(response).metadata();
+            const minDimension = Math.min(metadata.width || 300, metadata.height || 300);
+            
+            const squareImageBuffer = await sharp(response)
+                .resize(minDimension, minDimension, {
+                    fit: 'cover',
+                    position: 'center'
+                })
+                .toBuffer();
+            
             // Verificar si existe el logo
             if (!fs.existsSync(config.logoPath)) {
                 console.warn(`Logo not found at ${config.logoPath}, skipping watermark`);
-                await sharp(response).jpeg({ quality: 90 }).toFile(processedImagePath);
-                return `${this.chapterUrlPrefix}/${platformName}/covers/${channelId}.jpg`;
+                await sharp(squareImageBuffer).jpeg({ quality: 90 }).toFile(processedImagePath);
+                return `${this.chapterUrlPrefix}/${platformName}/covers/${sanitizedChannelId}_${timestamp}.jpg`;
             }
             
             // Procesar imagen con watermark
-            const metadata = await sharp(response).metadata();
-            const badgeSize = Math.floor((metadata.width || 300) * config.badgeSize);
+            const badgeSize = Math.floor(minDimension * config.badgeSize);
             
             // Crear el badge según la forma configurada
             const badgeBuffer = await this.createBadge(config, badgeSize);
@@ -98,11 +108,11 @@ export class ImageProcessor {
             const trimmedMetadata = await sharp(trimmedBadge).metadata();
             
             // Componer el badge pegado a los bordes superior y derecho
-            await sharp(response)
+            await sharp(squareImageBuffer)
                 .composite([{
                     input: trimmedBadge,
                     top: 0,
-                    left: metadata.width! - trimmedMetadata.width!
+                    left: minDimension - trimmedMetadata.width!
                 }])
                 .jpeg({ quality: 90 })
                 .toFile(processedImagePath);
