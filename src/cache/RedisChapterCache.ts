@@ -14,6 +14,7 @@ interface ChapterData {
     duration: string;
     mimeType: string;
     length: number;
+    playlistIndex?: number;
 }
 
 export class RedisChapterCache implements IChapterCache {
@@ -58,7 +59,8 @@ export class RedisChapterCache implements IChapterCache {
             parsed.image,
             parsed.duration,
             parsed.mimeType,
-            parsed.length
+            parsed.length,
+            parsed.playlistIndex
         );
     }
 
@@ -72,7 +74,8 @@ export class RedisChapterCache implements IChapterCache {
             image: chapter.image,
             duration: chapter.duration,
             mimeType: chapter.mimeType,
-            length: chapter.length
+            length: chapter.length,
+            playlistIndex: chapter.playlistIndex
         };
         
         await this.client.setEx(
@@ -114,7 +117,8 @@ export class RedisChapterCache implements IChapterCache {
             item.image,
             item.duration,
             item.mimeType,
-            item.length
+            item.length,
+            item.playlistIndex
         ));
     }
 
@@ -128,7 +132,8 @@ export class RedisChapterCache implements IChapterCache {
             image: chapter.image,
             duration: chapter.duration,
             mimeType: chapter.mimeType,
-            length: chapter.length
+            length: chapter.length,
+            playlistIndex: chapter.playlistIndex
         }));
         
         await this.client.setEx(

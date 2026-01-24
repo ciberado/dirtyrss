@@ -17,6 +17,7 @@ interface YoutubeVideoData {
     thumbnail: string;
     channel: string;
     channel_id: string;
+    playlist_index?: number;
 }
 
 export class YoutubeChannel extends Channel {
@@ -222,8 +223,18 @@ export class YoutubeChannel extends Channel {
                 }
             }
             
-            // Ordenar por fecha de publicación (más reciente primero)
-            collectedChapters.sort((a, b) => b.date.getTime() - a.date.getTime());
+            // Ordenar por playlist_index (orden original de YouTube)
+            collectedChapters.sort((a, b) => {
+                // Si ambos tienen playlist_index, ordenar por eso
+                if (a.playlistIndex !== undefined && b.playlistIndex !== undefined) {
+                    return a.playlistIndex - b.playlistIndex;
+                }
+                // Si solo uno tiene index, el que tiene va primero
+                if (a.playlistIndex !== undefined) return -1;
+                if (b.playlistIndex !== undefined) return 1;
+                // Si ninguno tiene index, ordenar por fecha (más reciente primero)
+                return b.date.getTime() - a.date.getTime();
+            });
             
             // Guardar en caché solo si cargamos todo
             if (!hasBackgroundLoading && firstVideo && collectedChapters.length > 0) {
@@ -286,8 +297,15 @@ export class YoutubeChannel extends Channel {
             console.log(`Background fetch completed. Total chapters: ${chapters.length}`);
             console.log(`Background fetch completed in ${(endTime - startTime).toFixed(2)}ms`);
             
-            // Ordenar por fecha de publicación (más reciente primero)
-            chapters.sort((a, b) => b.date.getTime() - a.date.getTime());
+            // Ordenar por playlist_index (orden original de YouTube)
+            chapters.sort((a, b) => {
+                if (a.playlistIndex !== undefined && b.playlistIndex !== undefined) {
+                    return a.playlistIndex - b.playlistIndex;
+                }
+                if (a.playlistIndex !== undefined) return -1;
+                if (b.playlistIndex !== undefined) return 1;
+                return b.date.getTime() - a.date.getTime();
+            });
             
             // Cachear la lista completa
             if (firstVideo && chapters.length > 0) {
@@ -334,7 +352,8 @@ export class YoutubeChannel extends Channel {
                 video.thumbnail,
                 this.formatDuration(video.duration),
                 'audio/mp4',
-                audioSize
+                audioSize,
+                video.playlist_index
             );
             
             Channel.chapterCache.set(cacheKey, chapter);
