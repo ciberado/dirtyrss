@@ -1,5 +1,5 @@
 import { Chapter } from '../models/Chapter.js';
-import { IChapterCache } from './IChapterCache.js';
+import { IChapterCache, CachedFeed } from './IChapterCache.js';
 
 interface ChapterData {
     id: string;
@@ -15,7 +15,7 @@ interface ChapterData {
 
 export class InMemoryChapterCache implements IChapterCache {
     private cache: Map<string, ChapterData>;
-    private listCache: Map<string, ChapterData[]>;
+    private listCache: Map<string, CachedFeed>;
 
     constructor() {
         this.cache = new Map();
@@ -65,37 +65,11 @@ export class InMemoryChapterCache implements IChapterCache {
         this.listCache.clear();
     }
 
-    getChapterList(key: string): Chapter[] | undefined {
-        const dataList = this.listCache.get(key);
-        if (!dataList) {
-            return undefined;
-        }
-
-        return dataList.map(data => new Chapter(
-            data.id,
-            data.title,
-            data.fileUrl,
-            data.description,
-            new Date(data.dateTimestamp),
-            data.image,
-            data.duration,
-            data.mimeType,
-            data.length
-        ));
+    getChapterList(key: string): CachedFeed | undefined {
+        return this.listCache.get(key);
     }
 
-    setChapterList(key: string, chapters: Chapter[]): void {
-        const dataList: ChapterData[] = chapters.map(chapter => ({
-            id: chapter.id,
-            title: chapter.title,
-            fileUrl: chapter.fileUrl,
-            description: chapter.description,
-            dateTimestamp: chapter.date.getTime(),
-            image: chapter.image,
-            duration: chapter.duration,
-            mimeType: chapter.mimeType,
-            length: chapter.length
-        }));
-        this.listCache.set(key, dataList);
+    setChapterList(key: string, feed: CachedFeed): void {
+        this.listCache.set(key, feed);
     }
 }

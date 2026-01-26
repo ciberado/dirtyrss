@@ -154,10 +154,10 @@ export class YoutubePlaylist extends Channel {
             const firstVideo = await this.getFirstVideo();
             if (firstVideo) {
                 const feedCacheKey = ChapterCacheKey.forFeedCache('youtube-playlist', this.playlistId, firstVideo.id);
-                const cachedChapters = await Channel.chapterCache.getChapterList(feedCacheKey);
-                if (cachedChapters) {
-                    console.log(`Returning ${cachedChapters.length} cached chapters while fetch in progress`);
-                    return cachedChapters;
+                const cachedFeed = await Channel.chapterCache.getChapterList(feedCacheKey);
+                if (cachedFeed && cachedFeed.chapters.length > 0) {
+                    console.log(`Returning ${cachedFeed.chapters.length} cached chapters while fetch in progress`);
+                    return cachedFeed.chapters;
                 }
             }
             
@@ -181,14 +181,14 @@ export class YoutubePlaylist extends Channel {
                 console.log(`First video - id: ${firstVideo.id}, title: ${firstVideo.title}`);
                 console.log(`Feed cache key: ${feedCacheKey}`);
                 
-                const cachedChapters = await Channel.chapterCache.getChapterList(feedCacheKey);
+                const cachedFeed = await Channel.chapterCache.getChapterList(feedCacheKey);
                 
-                console.log(`Cache result: ${cachedChapters ? `found ${cachedChapters.length} chapters` : 'NOT FOUND'}`);
+                console.log(`Cache result: ${cachedFeed ? `found ${cachedFeed.chapters.length} chapters (${cachedFeed.isComplete ? 'complete' : 'partial'})` : 'NOT FOUND'}`);
                 
-                if (cachedChapters) {
+                if (cachedFeed && cachedFeed.isComplete) {
                     const endTime = performance.now();
-                    console.log(`Feed cache hit! First video unchanged (${firstVideo.title}). Returning ${cachedChapters.length} cached chapters in ${(endTime - startTime).toFixed(2)}ms`);
-                    return cachedChapters;
+                    console.log(`Feed cache hit! First video unchanged (${firstVideo.title}). Returning ${cachedFeed.chapters.length} cached chapters in ${(endTime - startTime).toFixed(2)}ms`);
+                    return cachedFeed.chapters;
                 } else {
                     console.log(`Feed cache miss. First video: "${firstVideo.title}". Fetching all videos...`);
                 }
@@ -263,7 +263,11 @@ export class YoutubePlaylist extends Channel {
             // Guardar en caché solo si cargamos todo
             if (!hasBackgroundLoading && firstVideo && collectedChapters.length > 0) {
                 const feedCacheKey = ChapterCacheKey.forFeedCache('youtube-playlist', this.playlistId, firstVideo.id);
-                await Channel.chapterCache.setChapterList(feedCacheKey, collectedChapters);
+                await Channel.chapterCache.setChapterList(feedCacheKey, {
+                    chapters: collectedChapters,
+                    isComplete: true,
+                    lastUpdate: Date.now()
+                });
                 console.log(`Feed cached with ${collectedChapters.length} chapters (complete list). First video: "${firstVideo.title}"`);
             } else if (hasBackgroundLoading) {
                 console.log(`Feed NOT cached (background loading in progress)`);
@@ -334,7 +338,11 @@ export class YoutubePlaylist extends Channel {
             // Cachear la lista completa
             if (firstVideo && chapters.length > 0) {
                 const feedCacheKey = ChapterCacheKey.forFeedCache('youtube-playlist', this.playlistId, firstVideo.id);
-                await Channel.chapterCache.setChapterList(feedCacheKey, chapters);
+                await Channel.chapterCache.setChapterList(feedCacheKey, {
+                    chapters: chapters,
+                    isComplete: true,
+                    lastUpdate: Date.now()
+                });
                 console.log(`Feed cached with complete list (${chapters.length} chapters) after background loading. First video: "${firstVideo.title}"`);
             }
         } catch (error) {

@@ -136,18 +136,18 @@ export class IVooxChannel extends Channel {
             console.log(`First chapter - id: ${firstChapter.id}, title: ${firstChapter.title}, fileUrl: ${firstChapter.fileUrl}`);
             console.log(`Feed cache key: ${feedCacheKey}`);
             
-            const cachedChapters = await Channel.chapterCache.getChapterList(feedCacheKey);
+            const cachedFeed = await Channel.chapterCache.getChapterList(feedCacheKey);
             
-            console.log(`Cache result: ${cachedChapters ? `found ${cachedChapters.length} chapters` : 'NOT FOUND'}`);
+            console.log(`Cache result: ${cachedFeed ? `found ${cachedFeed.chapters.length} chapters (${cachedFeed.isComplete ? 'complete' : 'partial'})` : 'NOT FOUND'}`);
             
-            if (cachedChapters) {
+            if (cachedFeed && cachedFeed.isComplete) {
                 // Validar que la caché tiene la cantidad correcta de episodios
-                if (cachedChapters.length >= this.numChapters) {
+                if (cachedFeed.chapters.length >= this.numChapters) {
                     const endTime = performance.now();
-                    console.log(`Feed cache hit! First chapter unchanged (${firstChapter.title}). Returning ${cachedChapters.length} cached chapters in ${(endTime - startTime).toFixed(2)}ms`);
-                    return cachedChapters;
+                    console.log(`Feed cache hit! First chapter unchanged (${firstChapter.title}). Returning ${cachedFeed.chapters.length} cached chapters in ${(endTime - startTime).toFixed(2)}ms`);
+                    return cachedFeed.chapters;
                 } else {
-                    console.log(`Feed cache invalid: cached ${cachedChapters.length} chapters but podcast now has ${this.numChapters}. Re-fetching...`);
+                    console.log(`Feed cache invalid: cached ${cachedFeed.chapters.length} chapters but podcast now has ${this.numChapters}. Re-fetching...`);
                 }
             } else {
                 console.log(`Feed cache miss. First chapter: "${firstChapter.title}". Fetching all episodes...`);
@@ -208,7 +208,11 @@ export class IVooxChannel extends Channel {
             if (!hasBackgroundLoading && firstChapter && this.channelUrl) {
                 const feedCacheKey = ChapterCacheKey.forFeedCache('ivoox', this.channelName, firstChapter.id);
                 console.log(`[DEBUG] Saving to cache with key: ${feedCacheKey}`);
-                await Channel.chapterCache.setChapterList(feedCacheKey, collectedChapters);
+                await Channel.chapterCache.setChapterList(feedCacheKey, {
+                    chapters: collectedChapters,
+                    isComplete: true,
+                    lastUpdate: Date.now()
+                });
                 console.log(`Feed cached with ${collectedChapters.length} chapters (complete list). First chapter: "${firstChapter.title}"`);
             } else if (hasBackgroundLoading) {
                 console.log(`Feed NOT cached (${collectedChapters.length} chapters loaded, background loading in progress)`);
@@ -231,7 +235,8 @@ export class IVooxChannel extends Channel {
         }
         
         const feedCacheKey = ChapterCacheKey.forFeedCache('ivoox', this.channelName, firstChapter.id);
-        return await Channel.chapterCache.getChapterList(feedCacheKey);
+        const cachedFeed = await Channel.chapterCache.getChapterList(feedCacheKey);
+        return cachedFeed?.chapters;
     }
     
     private async getFirstChapter(): Promise<Chapter | undefined> {
@@ -290,7 +295,11 @@ export class IVooxChannel extends Channel {
                 allChapters.sort((a, b) => b.date.getTime() - a.date.getTime());
                 
                 const feedCacheKey = ChapterCacheKey.forFeedCache('ivoox', this.channelName, firstChapter.id);
-                await Channel.chapterCache.setChapterList(feedCacheKey, allChapters);
+                await Channel.chapterCache.setChapterList(feedCacheKey, {
+                    chapters: allChapters,
+                    isComplete: true,
+                    lastUpdate: Date.now()
+                });
                 console.log(`Feed cached with complete list (${allChapters.length} chapters) after background loading. First chapter: "${firstChapter.title}"`);
             }
             

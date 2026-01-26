@@ -1,5 +1,5 @@
 import { Chapter } from '../models/Chapter.js';
-import { IChapterCache } from './IChapterCache.js';
+import { IChapterCache, CachedFeed } from './IChapterCache.js';
 import { createClient } from 'redis';
 
 type RedisClientType = ReturnType<typeof createClient>;
@@ -101,14 +101,38 @@ export class RedisChapterCache implements IChapterCache {
         await this.client.quit();
     }
 
-    async getChapterList(key: string): Promise<Chapter[] | undefined> {
+    async getChapterList(key: string): Promise<CachedFeed | undefined> {
         const data = await this.client.get(this.prefix + 'list:' + key);
         if (!data) {
             return undefined;
         }
 
-        const parsed: ChapterData[] = JSON.parse(data);
-        return parsed.map(item => new Chapter(
+        const parsed = JSON.parse(data);
+        
+        // Migración automática: Si es formato antiguo (array), convertir a nuevo formato
+        if (Array.isArray(parsed)) {
+            const chapters = parsed.map((item: ChapterData) => new Chapter(
+                item.id,
+                item.title,
+                item.fileUrl,
+                item.description,
+                new Date(item.dateTimestamp),
+                item.image,
+                item.duration,
+                item.mimeType,
+                item.length,
+                item.playlistIndex
+            ));
+            
+            return {
+                chapters,
+                isComplete: true, // Asumimos que cachés antiguas estaban completas
+                lastUpdate: Date.now()
+            };
+        }
+        
+        // Formato nuevo, deserializar chapters
+        const chapters = parsed.chapters.map((item: ChapterData) => new Chapter(
             item.id,
             item.title,
             item.fileUrl,
@@ -120,10 +144,16 @@ export class RedisChapterCache implements IChapterCache {
             item.length,
             item.playlistIndex
         ));
+        
+        return {
+            chapters,
+            isComplete: parsed.isComplete,
+            lastUpdate: parsed.lastUpdate
+        };
     }
 
-    async setChapterList(key: string, chapters: Chapter[]): Promise<void> {
-        const dataList: ChapterData[] = chapters.map(chapter => ({
+    async setChapterList(key: string, feed: CachedFeed): Promise<void> {
+        const dataList: ChapterData[] = feed.chapters.map(chapter => ({
             id: chapter.id,
             title: chapter.title,
             fileUrl: chapter.fileUrl,
@@ -136,10 +166,16 @@ export class RedisChapterCache implements IChapterCache {
             playlistIndex: chapter.playlistIndex
         }));
         
+        const cachedFeed = {
+            chapters: dataList,
+            isComplete: feed.isComplete,
+            lastUpdate: feed.lastUpdate
+        };
+        
         await this.client.setEx(
             this.prefix + 'list:' + key,
             this.ttl,
-            JSON.stringify(dataList)
+            JSON.stringify(cachedFeed)
         );
     }
 }

@@ -1,13 +1,19 @@
 import { Chapter } from '../models/Chapter.js';
 
+export interface CachedFeed {
+    chapters: Chapter[];
+    isComplete: boolean;
+    lastUpdate: number;
+}
+
 export interface IChapterCache {
     get(key: string): Chapter | undefined | Promise<Chapter | undefined>;
     set(key: string, chapter: Chapter): void | Promise<void>;
     has(key: string): boolean | Promise<boolean>;
     clear(): void | Promise<void>;
     
-    getChapterList(key: string): Chapter[] | undefined | Promise<Chapter[] | undefined>;
-    setChapterList(key: string, chapters: Chapter[]): void | Promise<void>;
+    getChapterList(key: string): CachedFeed | undefined | Promise<CachedFeed | undefined>;
+    setChapterList(key: string, feed: CachedFeed): void | Promise<void>;
 }
 
 export class ChapterCacheKey {
