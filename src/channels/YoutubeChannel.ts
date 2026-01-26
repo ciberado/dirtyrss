@@ -198,7 +198,8 @@ export class YoutubeChannel extends Channel {
             );
             
             const videoIds = stdout.split('\n').filter(line => line.trim());
-            console.log(`Found ${videoIds.length} videos in channel, fetching metadata...`);
+            const totalVideoCount = videoIds.length; // Total reportado por YouTube
+            console.log(`Found ${totalVideoCount} videos in channel, fetching metadata...`);
             
             let collectedChapters: Chapter[] = [];
             let timeoutReached = false;
@@ -253,16 +254,17 @@ export class YoutubeChannel extends Channel {
                                 await Channel.chapterCache.setChapterList(feedCacheKey, {
                                     chapters: collectedChapters,
                                     isComplete: false,
-                                    lastUpdate: Date.now()
+                                    lastUpdate: Date.now(),
+                                    totalVideoCount: totalVideoCount
                                 });
-                                console.log(`Saved ${collectedChapters.length} partial chapters to cache`);
+                                console.log(`Saved ${collectedChapters.length}/${totalVideoCount} partial chapters to cache`);
                             }
                             
                             const remainingIds = videoIds.slice(i + batch.length);
                             if (remainingIds.length > 0) {
                                 hasBackgroundLoading = true;
                                 // Background SIN esperar (fire and forget)
-                                this.continueLoadingInBackground(remainingIds, firstVideo).catch(err => {
+                                this.continueLoadingInBackground(remainingIds, totalVideoCount, firstVideo).catch(err => {
                                     console.error('Background loading error:', err);
                                 });
                             }
@@ -296,9 +298,15 @@ export class YoutubeChannel extends Channel {
                 await Channel.chapterCache.setChapterList(feedCacheKey, {
                     chapters: collectedChapters,
                     isComplete: true,
-                    lastUpdate: Date.now()
+                    lastUpdate: Date.now(),
+                    totalVideoCount: totalVideoCount
                 });
-                console.log(`Feed cached with ${collectedChapters.length} chapters (complete list). First video: "${firstVideo.title}"`);
+                const failedCount = totalVideoCount - collectedChapters.length;
+                if (failedCount > 0) {
+                    console.log(`Feed cached with ${collectedChapters.length}/${totalVideoCount} chapters (${failedCount} failed). First video: "${firstVideo.title}"`);
+                } else {
+                    console.log(`Feed cached with ${collectedChapters.length}/${totalVideoCount} chapters. First video: "${firstVideo.title}"`);
+                }
             } else if (hasBackgroundLoading) {
                 console.log(`Feed NOT cached (background loading in progress)`);
             }
@@ -332,15 +340,15 @@ export class YoutubeChannel extends Channel {
         }
     }
     
-    private async continueLoadingInBackground(videoIds: string[], firstVideo?: { id: string, title: string }): Promise<void> {
+    private async continueLoadingInBackground(videoIds: string[], totalVideoCount: number, firstVideo?: { id: string, title: string }): Promise<void> {
         const startTime = performance.now();
-        const totalVideos = videoIds.length;
-        console.log(`[BACKGROUND] Starting background fetch for ${totalVideos} remaining videos`);
+        const remainingCount = videoIds.length;
+        console.log(`[BACKGROUND] Starting background fetch for ${remainingCount} remaining videos (total channel: ${totalVideoCount})`);
         
         try {
             // Cargar videos restantes con progreso
             const results = await Promise.allSettled(
-                videoIds.map((id, idx) => this.fetchChapterData(id, idx + 1, totalVideos, true))
+                videoIds.map((id, idx) => this.fetchChapterData(id, idx + 1, remainingCount, true))
             );
             
             const newChapters = results
@@ -379,9 +387,16 @@ export class YoutubeChannel extends Channel {
                     await Channel.chapterCache.setChapterList(feedCacheKey, {
                         chapters: allChapters,
                         isComplete: true,
-                        lastUpdate: Date.now()
+                        lastUpdate: Date.now(),
+                        totalVideoCount: totalVideoCount
                     });
-                    console.log(`Background complete! Updated cache with ${allChapters.length} total chapters. First video: "${firstVideo.title}"`);
+                    
+                    const failedCount = totalVideoCount - allChapters.length;
+                    if (failedCount > 0) {
+                        console.log(`Background complete! Updated cache with ${allChapters.length}/${totalVideoCount} chapters (${failedCount} failed). First video: "${firstVideo.title}"`);
+                    } else {
+                        console.log(`Background complete! Updated cache with ${allChapters.length}/${totalVideoCount} chapters. First video: "${firstVideo.title}"`);
+                    }
                 }
             }
         } catch (error) {

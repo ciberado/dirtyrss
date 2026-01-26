@@ -4,6 +4,7 @@ export interface CachedFeed {
     chapters: Chapter[];
     isComplete: boolean;
     lastUpdate: number;
+    totalVideoCount?: number; // Total de videos reportado por YouTube (puede ser > chapters.length si algunos fallaron)
 }
 
 export interface IChapterCache {

@@ -33,6 +33,7 @@ export class YoutubePlaylist extends Channel {
     private playlistUrl: string;
     private staticFilesPath: string;
     private chapterUrlPrefix: string;
+    private playlistVideoCount?: number;
 
     constructor(playlistId: string, chapterUrlPrefix: string = '', staticFilesPath: string = '/tmp/public') {
         super(playlistId);
@@ -137,6 +138,7 @@ export class YoutubePlaylist extends Channel {
             this.ttlInMinutes = 60;
             this.siteUrl = this.playlistUrl;
             this.link = this.playlistUrl;
+            this.playlistVideoCount = videoCount;
             
             if (videoCount) {
                 console.log(`Playlist has ${videoCount} videos`);
@@ -191,10 +193,23 @@ export class YoutubePlaylist extends Channel {
                 
                 console.log(`Cache result: ${cachedFeed ? `found ${cachedFeed.chapters.length} chapters (${cachedFeed.isComplete ? 'complete' : 'partial'})` : 'NOT FOUND'}`);
                 
-                if (cachedFeed && cachedFeed.isComplete) {
+                // Verificar si el número de videos cambió (comparando totalVideoCount, NO chapters.length)
+                let videoCountChanged = false;
+                if (cachedFeed && cachedFeed.isComplete && cachedFeed.totalVideoCount !== undefined && this.playlistVideoCount) {
+                    if (cachedFeed.totalVideoCount !== this.playlistVideoCount) {
+                        videoCountChanged = true;
+                        console.log(`[PLAYLIST CHANGED] Video count changed: cached ${cachedFeed.totalVideoCount} vs current ${this.playlistVideoCount}. Invalidating cache and refetching...`);
+                    } else {
+                        console.log(`[PLAYLIST UNCHANGED] Video count matches: ${this.playlistVideoCount} videos (${cachedFeed.chapters.length} successfully loaded)`);
+                    }
+                }
+                
+                if (cachedFeed && cachedFeed.isComplete && !videoCountChanged) {
                     const endTime = performance.now();
                     console.log(`Feed cache hit! First video unchanged (${firstVideo.title}). Returning ${cachedFeed.chapters.length} cached chapters in ${(endTime - startTime).toFixed(2)}ms`);
                     return cachedFeed.chapters;
+                } else if (videoCountChanged) {
+                    console.log(`Feed cache invalidated due to playlist size change. Fetching all videos...`);
                 } else {
                     console.log(`Feed cache miss. First video: "${firstVideo.title}". Fetching all videos...`);
                 }
@@ -206,7 +221,8 @@ export class YoutubePlaylist extends Channel {
             );
             
             const videoIds = stdout.split('\n').filter(line => line.trim());
-            console.log(`Found ${videoIds.length} videos in playlist, fetching metadata...`);
+            const totalVideoCount = videoIds.length; // Este es el count REAL de YouTube
+            console.log(`Found ${totalVideoCount} videos in playlist, fetching metadata...`);
             
             let collectedChapters: Chapter[] = [];
             let timeoutReached = false;
@@ -249,7 +265,7 @@ export class YoutubePlaylist extends Channel {
                             const remainingIds = videoIds.slice(i + batch.length);
                             if (remainingIds.length > 0) {
                                 hasBackgroundLoading = true;
-                                this.continueLoadingInBackground(remainingIds, firstVideo);
+                                this.continueLoadingInBackground(remainingIds, totalVideoCount, firstVideo);
                             }
                             break;
                         }
@@ -278,9 +294,15 @@ export class YoutubePlaylist extends Channel {
                 await Channel.chapterCache.setChapterList(feedCacheKey, {
                     chapters: collectedChapters,
                     isComplete: true,
-                    lastUpdate: Date.now()
+                    lastUpdate: Date.now(),
+                    totalVideoCount: totalVideoCount // Guardar el total reportado por YouTube
                 });
-                console.log(`Feed cached with ${collectedChapters.length} chapters (complete list). First video: "${firstVideo.title}"`);
+                const failedCount = totalVideoCount - collectedChapters.length;
+                if (failedCount > 0) {
+                    console.log(`Feed cached with ${collectedChapters.length}/${totalVideoCount} chapters (${failedCount} failed). First video: "${firstVideo.title}"`);
+                } else {
+                    console.log(`Feed cached with ${collectedChapters.length}/${totalVideoCount} chapters (complete list). First video: "${firstVideo.title}"`);
+                }
             } else if (hasBackgroundLoading) {
                 console.log(`Feed NOT cached (background loading in progress)`);
             }
@@ -313,14 +335,14 @@ export class YoutubePlaylist extends Channel {
         }
     }
     
-    private async continueLoadingInBackground(videoIds: string[], firstVideo?: { id: string, title: string }): Promise<void> {
+    private async continueLoadingInBackground(videoIds: string[], totalVideoCount: number, firstVideo?: { id: string, title: string }): Promise<void> {
         const startTime = performance.now();
-        const totalVideos = videoIds.length;
-        console.log(`[BACKGROUND] Starting background fetch for ${totalVideos} remaining videos`);
+        const remainingCount = videoIds.length;
+        console.log(`[BACKGROUND] Starting background fetch for ${remainingCount} remaining videos (total playlist: ${totalVideoCount})`);
         
         try {
             const results = await Promise.allSettled(
-                videoIds.map((id, idx) => this.fetchChapterData(id, idx + 1, totalVideos, true))
+                videoIds.map((id, idx) => this.fetchChapterData(id, idx + 1, remainingCount, true))
             );
             
             // Filtrar solo los exitosos
@@ -348,15 +370,40 @@ export class YoutubePlaylist extends Channel {
                 return b.date.getTime() - a.date.getTime();
             });
             
-            // Cachear la lista completa
-            if (firstVideo && chapters.length > 0) {
+            // Obtener caché parcial y combinar con nuevos capítulos
+            if (firstVideo) {
                 const feedCacheKey = ChapterCacheKey.forFeedCache('youtube-playlist', this.playlistId, firstVideo.id);
-                await Channel.chapterCache.setChapterList(feedCacheKey, {
-                    chapters: chapters,
-                    isComplete: true,
-                    lastUpdate: Date.now()
-                });
-                console.log(`Feed cached with complete list (${chapters.length} chapters) after background loading. First video: "${firstVideo.title}"`);
+                const cached = await Channel.chapterCache.getChapterList(feedCacheKey);
+                
+                if (cached) {
+                    // Combinar capítulos parciales + nuevos
+                    const allChapters = [...cached.chapters, ...chapters];
+                    
+                    // Ordenar
+                    allChapters.sort((a, b) => {
+                        if (a.playlistIndex !== undefined && b.playlistIndex !== undefined) {
+                            return a.playlistIndex - b.playlistIndex;
+                        }
+                        if (a.playlistIndex !== undefined) return -1;
+                        if (b.playlistIndex !== undefined) return 1;
+                        return b.date.getTime() - a.date.getTime();
+                    });
+                    
+                    // Guardar como completa
+                    await Channel.chapterCache.setChapterList(feedCacheKey, {
+                        chapters: allChapters,
+                        isComplete: true,
+                        lastUpdate: Date.now(),
+                        totalVideoCount: totalVideoCount
+                    });
+                    
+                    const failedCount = totalVideoCount - allChapters.length;
+                    if (failedCount > 0) {
+                        console.log(`Background complete! Updated cache with ${allChapters.length}/${totalVideoCount} chapters (${failedCount} failed). First video: "${firstVideo.title}"`);
+                    } else {
+                        console.log(`Background complete! Updated cache with ${allChapters.length}/${totalVideoCount} chapters. First video: "${firstVideo.title}"`);
+                    }
+                }
             }
         } catch (error) {
             console.error('Error during background fetch:', error);
