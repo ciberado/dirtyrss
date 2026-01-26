@@ -27,11 +27,23 @@ compose-restart:
 	docker compose restart
 
 compose-clean:
+	@echo "Deteniendo contenedores..."
 	docker compose --profile redis down
+	@echo "Eliminando imágenes de dirtyrss..."
+	docker images | grep dirtyrss | awk '{print $$3}' | xargs -r docker rmi -f || true
+	@echo "Limpiando build cache de Docker..."
+	docker builder prune -f
+	@echo "Limpieza completada"
 
 compose-remove-volumes:
+	@echo "Deteniendo contenedores y eliminando volúmenes..."
 	docker compose --profile redis down -v
+	@echo "Limpiando volúmenes huérfanos..."
 	docker volume prune -f
+	@echo "Limpieza de volúmenes completada"
+
+compose-full-clean: compose-clean compose-remove-volumes
+	@echo "Limpieza completa finalizada"
 
 compose-clear-cache:
 	@if docker compose ps | grep -q "Up"; then \
@@ -74,4 +86,7 @@ compose-clear-keys:
 		echo "Los contenedores no están en ejecución."; \
 	fi
 
-compose-up: compose-clear-cache compose-clean compose-build compose-up-redis
+compose-rebuild: compose-clean compose-build compose-up-redis
+	@echo "Rebuild completo finalizado"
+
+compose-up: compose-clear-cache compose-rebuild

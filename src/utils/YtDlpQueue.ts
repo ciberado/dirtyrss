@@ -7,6 +7,7 @@ interface QueueItem {
     command: string;
     resolve: (value: string) => void;
     reject: (reason: any) => void;
+    context?: string; // Información contextual para logging
 }
 
 /**
@@ -24,12 +25,13 @@ export class YtDlpQueue {
      * Ejecuta un comando yt-dlp respetando el límite de concurrencia global.
      * 
      * @param command - Comando completo a ejecutar
+     * @param context - Información contextual para logging (ej: "channel:@nombre, video:ID")
      * @param maxBuffer - Tamaño máximo del buffer (default: 50MB)
      * @returns Promise con el stdout del comando
      */
-    static async exec(command: string, maxBuffer: number = 50 * 1024 * 1024): Promise<string> {
+    static async exec(command: string, context?: string, maxBuffer: number = 50 * 1024 * 1024): Promise<string> {
         return new Promise((resolve, reject) => {
-            this.queue.push({ command, resolve, reject });
+            this.queue.push({ command, resolve, reject, context });
             this.processQueue();
         });
     }
@@ -47,16 +49,32 @@ export class YtDlpQueue {
         this.running++;
         
         const startTime = Date.now();
-        console.log(`[YtDlpQueue] Starting command (${this.running}/${this.MAX_CONCURRENT} active, ${this.queue.length} queued)`);
+        const contextStr = item.context || 'unknown';
 
         try {
             const { stdout } = await execAsync(item.command, { maxBuffer: 50 * 1024 * 1024 });
             const duration = Date.now() - startTime;
-            console.log(`[YtDlpQueue] Command completed in ${duration}ms (${this.running - 1}/${this.MAX_CONCURRENT} active, ${this.queue.length} queued)`);
+            console.log(`[yt-dlp] ✓ ${contextStr} (${duration}ms) [${this.running - 1}/${this.MAX_CONCURRENT} active]`);
             item.resolve(stdout);
-        } catch (error) {
+        } catch (error: any) {
             const duration = Date.now() - startTime;
-            console.error(`[YtDlpQueue] Command failed after ${duration}ms:`, error);
+            
+            // Extraer el mensaje de error más relevante
+            let errorMsg = 'unknown error';
+            if (error.stderr) {
+                const stderr = error.stderr.toString();
+                // Buscar la línea de ERROR
+                const errorLine = stderr.split('\n').find((line: string) => line.includes('ERROR:'));
+                if (errorLine) {
+                    errorMsg = errorLine.replace('ERROR: [youtube]', '').replace('ERROR:', '').trim();
+                } else {
+                    errorMsg = stderr.slice(0, 100);
+                }
+            } else if (error.message) {
+                errorMsg = error.message.slice(0, 100);
+            }
+            
+            console.error(`[yt-dlp] ✗ ${contextStr} (${duration}ms): ${errorMsg}`);
             item.reject(error);
         } finally {
             this.running--;

@@ -109,29 +109,13 @@ export class RedisChapterCache implements IChapterCache {
 
         const parsed = JSON.parse(data);
         
-        // Migración automática: Si es formato antiguo (array), convertir a nuevo formato
-        if (Array.isArray(parsed)) {
-            const chapters = parsed.map((item: ChapterData) => new Chapter(
-                item.id,
-                item.title,
-                item.fileUrl,
-                item.description,
-                new Date(item.dateTimestamp),
-                item.image,
-                item.duration,
-                item.mimeType,
-                item.length,
-                item.playlistIndex
-            ));
-            
-            return {
-                chapters,
-                isComplete: true, // Asumimos que cachés antiguas estaban completas
-                lastUpdate: Date.now()
-            };
+        // Validar estructura
+        if (!parsed || !parsed.chapters || !Array.isArray(parsed.chapters)) {
+            console.warn(`Invalid cached feed structure for key ${key}, ignoring cache`);
+            return undefined;
         }
         
-        // Formato nuevo, deserializar chapters
+        // Deserializar chapters
         const chapters = parsed.chapters.map((item: ChapterData) => new Chapter(
             item.id,
             item.title,

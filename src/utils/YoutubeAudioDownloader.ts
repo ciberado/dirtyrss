@@ -75,6 +75,7 @@ export class YoutubeAudioDownloader {
             // Usando la cola global para evitar sobrecarga
             const stdout = await YtDlpQueue.exec(
                 `${YoutubeChannel.ytDlpPath} -f "bestaudio[ext=m4a]" -o "${tempPath}" "https://www.youtube.com/watch?v=${videoId}"`,
+                `audio-download:${videoId}`,
                 100 * 1024 * 1024
             );
             

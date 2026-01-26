@@ -64,7 +64,8 @@ export class YoutubeChannel extends Channel {
             
             // Obtener metadata básica del primer video
             const stdout = await YtDlpQueue.exec(
-                `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.channelUrl}/videos"`
+                `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.channelUrl}/videos"`,
+                `channel:${this.channelId}, first-video`
             );
             
             const videoData: YoutubeVideoData = JSON.parse(stdout.split('\n')[0]);
@@ -120,21 +121,26 @@ export class YoutubeChannel extends Channel {
         const startTime = performance.now();
         const lockKey = `youtube:channel:${this.channelId}`;
         
-        // Si ya hay un fetch activo, devolver caché
+        // Si ya hay un fetch activo, intentar devolver caché parcial o completa
         if (YoutubeChannel.activeFetches.has(lockKey)) {
-            console.log(`Fetch already in progress for ${lockKey}, returning cache`);
+            console.log(`Fetch already in progress for ${lockKey}, checking for cached data...`);
             
             const firstVideo = await this.getFirstVideo();
             if (firstVideo) {
                 const feedCacheKey = ChapterCacheKey.forFeedCache('youtube', this.channelId, firstVideo.id);
-                const cachedFeed = await Channel.chapterCache.getChapterList(feedCacheKey);
-                if (cachedFeed && cachedFeed.chapters.length > 0) {
-                    console.log(`Returning ${cachedFeed.chapters.length} cached chapters while fetch in progress`);
-                    return cachedFeed.chapters;
+                
+                // Esperar hasta 2 segundos por si se está guardando caché parcial
+                for (let i = 0; i < 4; i++) {
+                    const cachedFeed = await Channel.chapterCache.getChapterList(feedCacheKey);
+                    if (cachedFeed && cachedFeed.chapters.length > 0) {
+                        console.log(`Returning ${cachedFeed.chapters.length} ${cachedFeed.isComplete ? 'complete' : 'partial'} chapters while fetch in progress`);
+                        return cachedFeed.chapters;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }
             }
             
-            console.log(`No cache available, returning empty array`);
+            console.log(`No cache available yet, returning empty array`);
             return [];
         }
         
@@ -158,10 +164,20 @@ export class YoutubeChannel extends Channel {
                 
                 console.log(`Cache result: ${cachedFeed ? `found ${cachedFeed.chapters.length} chapters (${cachedFeed.isComplete ? 'complete' : 'partial'})` : 'NOT FOUND'}`);
                 
-                if (cachedFeed && cachedFeed.isComplete) {
-                    const endTime = performance.now();
-                    console.log(`Feed cache hit! First video unchanged (${firstVideo.title}). Returning ${cachedFeed.chapters.length} cached chapters in ${(endTime - startTime).toFixed(2)}ms`);
-                    return cachedFeed.chapters;
+                if (cachedFeed) {
+                    if (cachedFeed.isComplete) {
+                        const endTime = performance.now();
+                        console.log(`Feed cache hit! Complete feed with ${cachedFeed.chapters.length} chapters in ${(endTime - startTime).toFixed(2)}ms`);
+                        return cachedFeed.chapters;
+                    } else {
+                        // Caché parcial, verificar si es reciente (< 5 min)
+                        const age = Date.now() - cachedFeed.lastUpdate;
+                        if (age < 5 * 60 * 1000) {
+                            console.log(`Recent partial cache (${Math.round(age / 1000)}s old), returning ${cachedFeed.chapters.length} chapters`);
+                            return cachedFeed.chapters;
+                        }
+                        console.log(`Stale partial cache (${Math.round(age / 1000)}s old), refetching...`);
+                    }
                 } else {
                     console.log(`Feed cache miss. First video: "${firstVideo.title}". Fetching all videos...`);
                 }
@@ -169,7 +185,8 @@ export class YoutubeChannel extends Channel {
             
             // Obtener lista de IDs usando la cola
             const stdout = await YtDlpQueue.exec(
-                `${YoutubeChannel.ytDlpPath} --flat-playlist --print "%(id)s" "${this.channelUrl}/videos"`
+                `${YoutubeChannel.ytDlpPath} --flat-playlist --print "%(id)s" "${this.channelUrl}/videos"`,
+                `channel:${this.channelId}, list-videos`
             );
             
             const videoIds = stdout.split('\n').filter(line => line.trim());
@@ -207,10 +224,33 @@ export class YoutubeChannel extends Channel {
                         }
                     } catch (error) {
                         if (timeoutReached && collectedChapters.length < videoIds.length) {
+                            // Guardar caché parcial antes de lanzar background
+                            if (firstVideo && collectedChapters.length > 0) {
+                                collectedChapters.sort((a, b) => {
+                                    if (a.playlistIndex !== undefined && b.playlistIndex !== undefined) {
+                                        return a.playlistIndex - b.playlistIndex;
+                                    }
+                                    if (a.playlistIndex !== undefined) return -1;
+                                    if (b.playlistIndex !== undefined) return 1;
+                                    return b.date.getTime() - a.date.getTime();
+                                });
+                                
+                                const feedCacheKey = ChapterCacheKey.forFeedCache('youtube', this.channelId, firstVideo.id);
+                                await Channel.chapterCache.setChapterList(feedCacheKey, {
+                                    chapters: collectedChapters,
+                                    isComplete: false,
+                                    lastUpdate: Date.now()
+                                });
+                                console.log(`Saved ${collectedChapters.length} partial chapters to cache`);
+                            }
+                            
                             const remainingIds = videoIds.slice(i + batch.length);
                             if (remainingIds.length > 0) {
                                 hasBackgroundLoading = true;
-                                this.continueLoadingInBackground(remainingIds, firstVideo);
+                                // Background SIN esperar (fire and forget)
+                                this.continueLoadingInBackground(remainingIds, firstVideo).catch(err => {
+                                    console.error('Background loading error:', err);
+                                });
                             }
                             break;
                         }
@@ -263,7 +303,8 @@ export class YoutubeChannel extends Channel {
     private async getFirstVideo(): Promise<{ id: string, title: string } | undefined> {
         try {
             const stdout = await YtDlpQueue.exec(
-                `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.channelUrl}/videos"`
+                `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.channelUrl}/videos"`,
+                `channel:${this.channelId}, get-first-video`
             );
             
             const video: YoutubeVideoData = JSON.parse(stdout.split('\n')[0]);
@@ -279,15 +320,15 @@ export class YoutubeChannel extends Channel {
     
     private async continueLoadingInBackground(videoIds: string[], firstVideo?: { id: string, title: string }): Promise<void> {
         const startTime = performance.now();
-        console.log(`Continuing video fetch in background for ${videoIds.length} videos`);
+        console.log(`Background loading ${videoIds.length} remaining videos`);
         
         try {
+            // Cargar videos restantes
             const results = await Promise.allSettled(
                 videoIds.map(id => this.fetchChapterData(id))
             );
             
-            // Filtrar solo los exitosos
-            const chapters = results
+            const newChapters = results
                 .filter((result): result is PromiseFulfilledResult<Chapter> => result.status === 'fulfilled')
                 .map(result => result.value);
             
@@ -298,31 +339,38 @@ export class YoutubeChannel extends Channel {
             }
             
             const endTime = performance.now();
-            console.log(`Background fetch completed. Total chapters: ${chapters.length}`);
-            console.log(`Background fetch completed in ${(endTime - startTime).toFixed(2)}ms`);
+            console.log(`Background fetch completed. Loaded ${newChapters.length} new chapters in ${(endTime - startTime).toFixed(2)}ms`);
             
-            // Ordenar por playlist_index (orden original de YouTube)
-            chapters.sort((a, b) => {
-                if (a.playlistIndex !== undefined && b.playlistIndex !== undefined) {
-                    return a.playlistIndex - b.playlistIndex;
-                }
-                if (a.playlistIndex !== undefined) return -1;
-                if (b.playlistIndex !== undefined) return 1;
-                return b.date.getTime() - a.date.getTime();
-            });
-            
-            // Cachear la lista completa
-            if (firstVideo && chapters.length > 0) {
+            if (firstVideo && newChapters.length > 0) {
                 const feedCacheKey = ChapterCacheKey.forFeedCache('youtube', this.channelId, firstVideo.id);
-                await Channel.chapterCache.setChapterList(feedCacheKey, {
-                    chapters: chapters,
-                    isComplete: true,
-                    lastUpdate: Date.now()
-                });
-                console.log(`Feed cached with complete list (${chapters.length} chapters) after background loading. First video: "${firstVideo.title}"`);
+                
+                // Obtener caché parcial existente
+                const cached = await Channel.chapterCache.getChapterList(feedCacheKey);
+                if (cached) {
+                    // Combinar capítulos parciales + nuevos
+                    const allChapters = [...cached.chapters, ...newChapters];
+                    
+                    // Ordenar
+                    allChapters.sort((a, b) => {
+                        if (a.playlistIndex !== undefined && b.playlistIndex !== undefined) {
+                            return a.playlistIndex - b.playlistIndex;
+                        }
+                        if (a.playlistIndex !== undefined) return -1;
+                        if (b.playlistIndex !== undefined) return 1;
+                        return b.date.getTime() - a.date.getTime();
+                    });
+                    
+                    // Guardar como completa
+                    await Channel.chapterCache.setChapterList(feedCacheKey, {
+                        chapters: allChapters,
+                        isComplete: true,
+                        lastUpdate: Date.now()
+                    });
+                    console.log(`Background complete! Updated cache with ${allChapters.length} total chapters. First video: "${firstVideo.title}"`);
+                }
             }
         } catch (error) {
-            console.error('Error during background fetch:', error);
+            console.error('Background loading failed:', error);
         }
     }
 
@@ -336,7 +384,8 @@ export class YoutubeChannel extends Channel {
         
         try {
             const stdout = await YtDlpQueue.exec(
-                `${YoutubeChannel.ytDlpPath} --dump-json "https://www.youtube.com/watch?v=${id}"`
+                `${YoutubeChannel.ytDlpPath} --dump-json "https://www.youtube.com/watch?v=${id}"`,
+                `channel:${this.channelId}, video:${id}`
             );
             
             const video: YoutubeVideoData = JSON.parse(stdout);
@@ -377,7 +426,9 @@ export class YoutubeChannel extends Channel {
         const year = parseInt(dateStr.substring(0, 4));
         const month = parseInt(dateStr.substring(4, 6)) - 1;
         const day = parseInt(dateStr.substring(6, 8));
-        return new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+        const result = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+        console.log(`DEBUG parseDate: input="${dateStr}" -> year=${year}, month=${month}, day=${day} -> ${result.toUTCString()}`);
+        return result;
     }
     
     private formatDuration(seconds: number): string {
