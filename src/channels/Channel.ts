@@ -125,22 +125,10 @@ export abstract class Channel {
             }
         });
 
-        // Ajustar pubDate para mantener orden decreciente coherente
-        let previousPubDate: Date | null = null;
-        
         chapters.forEach(c => {
-            let pubDate = new Date(c.date);
-            
-            // Si la fecha es igual o posterior a la anterior, restar 1 hora
-            if (previousPubDate !== null && pubDate.getTime() >= previousPubDate.getTime()) {
-                pubDate = new Date(previousPubDate.getTime() - (60 * 60 * 1000)); // -1 hora
-            }
-            
-            previousPubDate = pubDate;
-            
             feed.addItem({
                 title: c.title,
-                date: pubDate.toUTCString(),
+                date: c.date.toUTCString(),
                 description: c.description,
                 imageUrl: c.image,
                 itunesImage : c.image,

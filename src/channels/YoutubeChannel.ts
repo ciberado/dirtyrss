@@ -369,7 +369,7 @@ export class YoutubeChannel extends Channel {
         const year = parseInt(dateStr.substring(0, 4));
         const month = parseInt(dateStr.substring(4, 6)) - 1;
         const day = parseInt(dateStr.substring(6, 8));
-        return new Date(year, month, day);
+        return new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
     }
     
     private formatDuration(seconds: number): string {
