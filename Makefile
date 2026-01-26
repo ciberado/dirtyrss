@@ -21,7 +21,7 @@ compose-logs:
 	docker compose logs -f
 
 compose-build:
-	docker compose build
+	docker compose build --no-cache
 
 compose-restart:
 	docker compose restart

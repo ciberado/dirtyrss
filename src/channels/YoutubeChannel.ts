@@ -400,12 +400,14 @@ export class YoutubeChannel extends Channel {
                 ? `${video.description}\n\n${videoUrl}`
                 : videoUrl;
             
+            const parsedDate = this.parseDate(video.upload_date, video.title, video.duration);
+            
             const chapter = new Chapter(
                 video.id,
                 video.title,
                 `${this.chapterUrlPrefix}/youtube/channel/${this.channelId}/${video.id}.m4a`,
                 descriptionWithLink,
-                this.parseDate(video.upload_date),
+                parsedDate,
                 video.thumbnail,
                 this.formatDuration(video.duration),
                 'audio/mp4',
@@ -421,13 +423,19 @@ export class YoutubeChannel extends Channel {
         }
     }
     
-    private parseDate(dateStr: string): Date {
+    private parseDate(dateStr: string, title?: string, duration?: number): Date {
         // yt-dlp returns dates as YYYYMMDD
         const year = parseInt(dateStr.substring(0, 4));
         const month = parseInt(dateStr.substring(4, 6)) - 1;
         const day = parseInt(dateStr.substring(6, 8));
         const result = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-        console.log(`DEBUG parseDate: input="${dateStr}" -> year=${year}, month=${month}, day=${day} -> ${result.toUTCString()}`);
+        
+        // Formatear fecha como YYYYMMDDHHmmss
+        const formattedDate = result.toISOString().replace(/[-:]/g, '').replace('T', '').substring(0, 14);
+        const durationStr = duration ? this.formatDuration(duration) : 'unknown';
+        const titleStr = title ? title.substring(0, 50) : 'unknown';
+        
+        console.log(`[VIDEO] ${formattedDate} | ${durationStr} | ${titleStr}`);
         return result;
     }
     
