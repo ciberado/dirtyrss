@@ -215,10 +215,14 @@ export class YoutubeChannel extends Channel {
                 // Procesar en batches preservando el orden original
                 for (let i = 0; i < videoIds.length && !timeoutReached; i += YoutubeChannel.FETCH_BATCH_SIZE) {
                     const batch = videoIds.slice(i, i + YoutubeChannel.FETCH_BATCH_SIZE);
+                    const batchNum = Math.floor(i / YoutubeChannel.FETCH_BATCH_SIZE) + 1;
+                    const totalBatches = Math.ceil(videoIds.length / YoutubeChannel.FETCH_BATCH_SIZE);
                     
                     try {
                         const batchResults = await Promise.race([
-                            Promise.allSettled(batch.map(id => this.fetchChapterData(id))),
+                            Promise.allSettled(batch.map((id, idx) => 
+                                this.fetchChapterData(id, i + idx + 1, videoIds.length)
+                            )),
                             timeoutPromise
                         ]) as PromiseSettledResult<Chapter>[];
                         
@@ -230,6 +234,8 @@ export class YoutubeChannel extends Channel {
                                 console.error(`Error fetching video: ${result.reason}`);
                             }
                         }
+                        
+                        console.log(`[PROGRESS] Batch ${batchNum}/${totalBatches} completed | ${collectedChapters.length}/${videoIds.length} videos processed`);
                     } catch (error) {
                         if (timeoutReached && collectedChapters.length < videoIds.length) {
                             // Guardar caché parcial antes de lanzar background
@@ -328,12 +334,13 @@ export class YoutubeChannel extends Channel {
     
     private async continueLoadingInBackground(videoIds: string[], firstVideo?: { id: string, title: string }): Promise<void> {
         const startTime = performance.now();
-        console.log(`Background loading ${videoIds.length} remaining videos`);
+        const totalVideos = videoIds.length;
+        console.log(`[BACKGROUND] Starting background fetch for ${totalVideos} remaining videos`);
         
         try {
-            // Cargar videos restantes
+            // Cargar videos restantes con progreso
             const results = await Promise.allSettled(
-                videoIds.map(id => this.fetchChapterData(id))
+                videoIds.map((id, idx) => this.fetchChapterData(id, idx + 1, totalVideos, true))
             );
             
             const newChapters = results
@@ -382,7 +389,7 @@ export class YoutubeChannel extends Channel {
         }
     }
 
-    protected async fetchChapterData(id: string): Promise<Chapter> {
+    protected async fetchChapterData(id: string, currentIndex?: number, totalVideos?: number, isBackground?: boolean): Promise<Chapter> {
         const cacheKey = ChapterCacheKey.forChapter('youtube', this.channelId, id);
         
         const cachedChapter = await Channel.chapterCache.get(cacheKey);
@@ -391,9 +398,18 @@ export class YoutubeChannel extends Channel {
         }
         
         try {
+            // Construir contexto para logging
+            const progressInfo = currentIndex && totalVideos 
+                ? `${currentIndex}/${totalVideos}` 
+                : '';
+            const bgPrefix = isBackground ? '[BG]' : '';
+            const context = progressInfo 
+                ? `${bgPrefix}channel:${this.channelId}, video:${id} (${progressInfo})`
+                : `channel:${this.channelId}, video:${id}`;
+            
             const stdout = await YtDlpQueue.exec(
                 `${YoutubeChannel.ytDlpPath} --dump-json "https://www.youtube.com/watch?v=${id}"`,
-                `channel:${this.channelId}, video:${id}`
+                context
             );
             
             const video: YoutubeVideoData = JSON.parse(stdout);

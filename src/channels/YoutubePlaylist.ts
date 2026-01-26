@@ -55,22 +55,28 @@ export class YoutubePlaylist extends Channel {
         
         try {
             const response = await got(this.playlistUrl);
-            const $ = cheerio.load(response.body);
+            const body = response.body;
             
-            // Extraer metadata de los tags HTML
-            const playlistTitle = $('meta[property="og:title"]').attr('content')?.trim() || 
-                                 $('meta[name="title"]').attr('content')?.trim() ||
-                                 `Playlist ${this.playlistId}`;
-            
-            const playlistImage = $('meta[property="og:image"]').attr('content')?.trim() ||
-                                 `https://i.ytimg.com/vi/${this.playlistId}/hqdefault.jpg`;
+            // Scope limitado para Cheerio DOM
+            let playlistTitle: string;
+            let playlistImage: string;
+            {
+                const $ = cheerio.load(body);
+                playlistTitle = $('meta[property="og:title"]').attr('content')?.trim() || 
+                               $('meta[name="title"]').attr('content')?.trim() ||
+                               `Playlist ${this.playlistId}`;
+                
+                playlistImage = $('meta[property="og:image"]').attr('content')?.trim() ||
+                               `https://i.ytimg.com/vi/${this.playlistId}/hqdefault.jpg`;
+                // DOM se libera aquí
+            }
             
             // Intentar extraer del JSON ytInitialData para obtener la descripción completa
             let playlistDescription = `Videos from playlist: ${playlistTitle}`;
             let author = 'Unknown';
             let videoCount: number | undefined = undefined;
             
-            const ytInitialDataMatch = response.body.match(/var ytInitialData = (\{.*?\});/s);
+            const ytInitialDataMatch = body.match(/var ytInitialData = (\{.*?\});/s);
             if (ytInitialDataMatch) {
                 try {
                     const ytData = JSON.parse(ytInitialDataMatch[1]);
@@ -111,17 +117,17 @@ export class YoutubePlaylist extends Channel {
                 } catch (e) {
                     console.error('Error parsing ytInitialData:', e);
                     // Fallback a regex
-                    const authorMatch = response.body.match(/"ownerText":\{"runs":\[\{"text":"([^"]+)"/);
+                    const authorMatch = body.match(/"ownerText":\{"runs":\[\{"text":"([^"]+)"/);
                     author = authorMatch ? authorMatch[1] : 'Unknown';
                     
-                    const statsMatch = response.body.match(/"stats":\[\{"runs":\[\{"text":"(\d+)"\}/);
+                    const statsMatch = body.match(/"stats":\[\{"runs":\[\{"text":"(\d+)"\}/);
                     videoCount = statsMatch ? parseInt(statsMatch[1]) : undefined;
                 }
             } else {
-                // Fallback a meta tag si no hay ytInitialData
-                playlistDescription = $('meta[property="og:description"]').attr('content')?.trim() || 
-                                     $('meta[name="description"]').attr('content')?.trim() ||
-                                     playlistDescription;
+                // Fallback a meta tag si no hay ytInitialData (sin DOM)
+                const ogDescMatch = body.match(/<meta\s+property="og:description"\s+content="([^"]+)"/);
+                const nameDescMatch = body.match(/<meta\s+name="description"\s+content="([^"]+)"/);
+                playlistDescription = ogDescMatch?.[1] || nameDescMatch?.[1] || playlistDescription;
             }
             
             this.channelName = playlistTitle;
@@ -214,13 +220,17 @@ export class YoutubePlaylist extends Channel {
             });
             
             try {
-                // Procesar en batches como iVoox
+                // Procesar en batches
                 for (let i = 0; i < videoIds.length && !timeoutReached; i += YoutubePlaylist.FETCH_BATCH_SIZE) {
                     const batch = videoIds.slice(i, i + YoutubePlaylist.FETCH_BATCH_SIZE);
+                    const batchNum = Math.floor(i / YoutubePlaylist.FETCH_BATCH_SIZE) + 1;
+                    const totalBatches = Math.ceil(videoIds.length / YoutubePlaylist.FETCH_BATCH_SIZE);
                     
                     try {
                         const batchResults = await Promise.race([
-                            Promise.allSettled(batch.map(id => this.fetchChapterData(id))),
+                            Promise.allSettled(batch.map((id, idx) => 
+                                this.fetchChapterData(id, i + idx + 1, videoIds.length)
+                            )),
                             timeoutPromise
                         ]) as PromiseSettledResult<Chapter>[];
                         
@@ -232,6 +242,8 @@ export class YoutubePlaylist extends Channel {
                                 console.error(`Error fetching video: ${result.reason}`);
                             }
                         }
+                        
+                        console.log(`[PROGRESS] Batch ${batchNum}/${totalBatches} completed | ${collectedChapters.length}/${videoIds.length} videos processed`);
                     } catch (error) {
                         if (timeoutReached && collectedChapters.length < videoIds.length) {
                             const remainingIds = videoIds.slice(i + batch.length);
@@ -303,11 +315,12 @@ export class YoutubePlaylist extends Channel {
     
     private async continueLoadingInBackground(videoIds: string[], firstVideo?: { id: string, title: string }): Promise<void> {
         const startTime = performance.now();
-        console.log(`Continuing video fetch in background for ${videoIds.length} videos`);
+        const totalVideos = videoIds.length;
+        console.log(`[BACKGROUND] Starting background fetch for ${totalVideos} remaining videos`);
         
         try {
             const results = await Promise.allSettled(
-                videoIds.map(id => this.fetchChapterData(id))
+                videoIds.map((id, idx) => this.fetchChapterData(id, idx + 1, totalVideos, true))
             );
             
             // Filtrar solo los exitosos
@@ -350,7 +363,7 @@ export class YoutubePlaylist extends Channel {
         }
     }
 
-    protected async fetchChapterData(id: string): Promise<Chapter> {
+    protected async fetchChapterData(id: string, currentIndex?: number, totalVideos?: number, isBackground?: boolean): Promise<Chapter> {
         const cacheKey = ChapterCacheKey.forChapter('youtube-playlist', this.playlistId, id);
         
         const cachedChapter = await Channel.chapterCache.get(cacheKey);
@@ -359,8 +372,18 @@ export class YoutubePlaylist extends Channel {
         }
         
         try {
+            // Construir contexto para logging
+            const progressInfo = currentIndex && totalVideos 
+                ? `${currentIndex}/${totalVideos}` 
+                : '';
+            const bgPrefix = isBackground ? '[BG]' : '';
+            const context = progressInfo 
+                ? `${bgPrefix}playlist:${this.playlistId}, video:${id} (${progressInfo})`
+                : `playlist:${this.playlistId}, video:${id}`;
+            
             const stdout = await YtDlpQueue.exec(
-                `${YoutubeChannel.ytDlpPath} --dump-json "https://www.youtube.com/watch?v=${id}"`
+                `${YoutubeChannel.ytDlpPath} --dump-json "https://www.youtube.com/watch?v=${id}"`,
+                context
             );
             
             const video: YoutubeVideoData = JSON.parse(stdout);
