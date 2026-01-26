@@ -39,6 +39,7 @@ export class TwitchChannel extends Channel{
 
     static twitchDlPath : string;
     static downloadingEpisodes : { [key: string]: boolean; } = {};
+    // Cache de videos por instancia, se limpia al destruirse la instancia
     private allVideosData: TwitchVideoData[] | null = null;
     
     chapterUrlPrefix: string;
@@ -71,10 +72,15 @@ export class TwitchChannel extends Channel{
             }
             
             const response = await got(url, TwitchChannel.TWITCH_REQUEST_OPTIONS);
-            const $ = cheerio.load(response.body);
+            const body = response.body;
             
-            imageUrl = $('meta[property="og:image"]').attr('content')?.trim();
-            description = $('meta[property="og:description"]').attr('content')?.trim();
+            // Scope limitado para Cheerio DOM
+            {
+                const $ = cheerio.load(body);
+                imageUrl = $('meta[property="og:image"]').attr('content')?.trim();
+                description = $('meta[property="og:description"]').attr('content')?.trim();
+                // DOM se libera aquí
+            }
             
             console.log(`[DEBUG] Attempt ${attempt} - og:image: ${imageUrl}`);
             

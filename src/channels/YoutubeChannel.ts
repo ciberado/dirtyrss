@@ -91,17 +91,25 @@ export class YoutubeChannel extends Channel {
     private async getChannelImage(): Promise<string> {
         try {
             const response = await got(`${this.channelUrl}/videos`);
-            const $ = cheerio.load(response.body);
+            const body = response.body;
             
-            // Intentar obtener desde meta tag og:image (imagen del canal)
-            const ogImage = $('meta[property="og:image"]').attr('content');
-            if (ogImage) {
-                console.log(`Channel image from og:image: ${ogImage}`);
-                return ogImage;
+            // Liberar el response body después de extraer
+            let result: string | undefined;
+            
+            // Scope limitado para el DOM de Cheerio
+            {
+                const $ = cheerio.load(body);
+                result = $('meta[property="og:image"]').attr('content');
+                // El DOM de Cheerio sale de scope aquí
             }
             
-            // Fallback: buscar en el JSON de la página
-            const match = response.body.match(/"avatar":\{"thumbnails":\[\{"url":"([^"]+)"/);
+            if (result) {
+                console.log(`Channel image from og:image: ${result}`);
+                return result;
+            }
+            
+            // Fallback: buscar en el JSON de la página (sin DOM)
+            const match = body.match(/"avatar":\{"thumbnails":\[\{"url":"([^"]+)"/);
             if (match && match[1]) {
                 console.log(`Channel image from JSON: ${match[1]}`);
                 return match[1];
