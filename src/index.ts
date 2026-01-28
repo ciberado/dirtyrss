@@ -63,7 +63,11 @@ if (fs.existsSync(FASTIFY_STATIC) === false) {
 }
 fastify.register(fastifyStatic, {
     root : FASTIFY_STATIC,
-    acceptRanges : true
+    acceptRanges : true,
+    maxAge: '1d',           // Cache de 1 día
+    cacheControl: true,     // Envía headers Cache-Control
+    etag: true,             // Envía ETag para validación
+    immutable: true         // Indica que el recurso no cambiará (opcional, agresivo)
 });
 
 // Health check and memory monitoring endpoint
