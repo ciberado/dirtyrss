@@ -20,15 +20,15 @@ interface ChapterData {
 export class RedisChapterCache implements IChapterCache {
     private client: RedisClientType;
     private prefix: string;
-    private ttl: number; // Time to live en segundos
+    private ttl: number | undefined; // Time to live en segundos, undefined = sin expiración
 
-    constructor(client: RedisClientType, prefix: string = 'chapter:', ttl: number = 86400) {
+    constructor(client: RedisClientType, prefix: string = 'chapter:', ttl?: number) {
         this.client = client;
         this.prefix = prefix;
         this.ttl = ttl;
     }
 
-    static async create(prefix: string = 'chapter:', ttl: number = 86400): Promise<RedisChapterCache> {
+    static async create(prefix: string = 'chapter:', ttl?: number): Promise<RedisChapterCache> {
         const [host, port] = (process.env.REDIS_ADDRESS || 'localhost:6379').split(':');
         
         const client = createClient({
@@ -78,11 +78,18 @@ export class RedisChapterCache implements IChapterCache {
             playlistIndex: chapter.playlistIndex
         };
         
-        await this.client.setEx(
-            this.prefix + key,
-            this.ttl,
-            JSON.stringify(data)
-        );
+        if (this.ttl !== undefined) {
+            await this.client.setEx(
+                this.prefix + key,
+                this.ttl,
+                JSON.stringify(data)
+            );
+        } else {
+            await this.client.set(
+                this.prefix + key,
+                JSON.stringify(data)
+            );
+        }
     }
 
     async has(key: string): Promise<boolean> {
@@ -153,13 +160,21 @@ export class RedisChapterCache implements IChapterCache {
         const cachedFeed = {
             chapters: dataList,
             isComplete: feed.isComplete,
-            lastUpdate: feed.lastUpdate
+            lastUpdate: feed.lastUpdate,
+            totalVideoCount: feed.totalVideoCount
         };
         
-        await this.client.setEx(
-            this.prefix + 'list:' + key,
-            this.ttl,
-            JSON.stringify(cachedFeed)
-        );
+        if (this.ttl !== undefined) {
+            await this.client.setEx(
+                this.prefix + 'list:' + key,
+                this.ttl,
+                JSON.stringify(cachedFeed)
+            );
+        } else {
+            await this.client.set(
+                this.prefix + 'list:' + key,
+                JSON.stringify(cachedFeed)
+            );
+        }
     }
 }

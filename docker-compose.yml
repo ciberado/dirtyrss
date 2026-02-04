@@ -11,7 +11,7 @@ services:
       redis-server
       --appendonly yes
       --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy allkeys-lfu
       --save ""
       --appendfsync everysec
       --auto-aof-rewrite-percentage 100
