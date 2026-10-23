@@ -3,12 +3,12 @@ import path from 'path';
 
 import * as cheerio from "cheerio"; 
 import { default as got } from 'got';
-import {PythonShell} from 'python-shell';
 
 import { Chapter } from '../models/Chapter.js';
 import { Channel } from './Channel.js';
 import { ChapterCacheKey } from '../cache/IChapterCache.js';
 import { ExternalTools } from '../utils/ExternalTools.js';
+import { YtDlpQueue } from '../utils/YtDlpQueue.js';
 
 interface TwitchVideoData {
     id: string;
@@ -122,28 +122,16 @@ export class TwitchChannel extends Channel{
             return this.allVideosData;
         }
 
-        return new Promise(async (resolve, reject) => {
-            console.log(`Retrieving list of episodes for channel ${this.channelName}.`);
-            const opt = {
-                mode: 'json' as const,
-                pythonPath: '/usr/bin/python3',
-                pythonOptions: [], 
-                scriptPath: path.dirname(TwitchChannel.twitchDlPath),
-                args: ['videos', this.username, '--json', '--all']
-            };
+        console.log(`Retrieving list of episodes for channel ${this.channelName}.`);
 
-            PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, (err, results : unknown) => {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-                console.log('List of episodes retrieved.');
-                const twitchChapters = results as TwitchChannelData[];
-                const videos = !twitchChapters ? [] : twitchChapters[0].videos;
-                this.allVideosData = videos;
-                resolve(videos);
-            });
-        });
+        const command = `/usr/bin/python3 "${TwitchChannel.twitchDlPath}" videos "${this.username}" --json --all`;
+        const stdout = await YtDlpQueue.exec(command, `twitch-videos:${this.username}`, 'light', 'twitch-dl', `videos:${this.username}`);
+
+        console.log('List of episodes retrieved.');
+        const data = JSON.parse(stdout) as TwitchChannelData;
+        const videos = data?.videos ?? [];
+        this.allVideosData = videos;
+        return videos;
     }
 
     protected async fetchChapterData(id: string): Promise<Chapter> {
@@ -207,50 +195,41 @@ export class TwitchChannel extends Channel{
     }
 
     private async downloadEpisode(episodeId : string, fileName: string) {
-        return new Promise((resolve, reject) => {
-            if (TwitchChannel.downloadingEpisodes[episodeId] === true) {
-                console.log(`Episode ${episodeId} already being downloaded.`);
-                return;
-            }
-            
-            const tempM4aFile = fileName.replace('.m4a', '.tmp.m4a');
+        if (TwitchChannel.downloadingEpisodes[episodeId] === true) {
+            console.log(`Episode ${episodeId} already being downloaded.`);
+            return;
+        }
+
+        const tempM4aFile = fileName.replace('.m4a', '.tmp.m4a');
+        if (fs.existsSync(tempM4aFile)) {
+            console.log(`Episode ${episodeId} is already being downloaded (${tempM4aFile} exists).`);
+            return;
+        }
+
+        const dir = path.dirname(fileName);
+        if (!fs.existsSync(dir)){
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        const command = `/usr/bin/python3 "${TwitchChannel.twitchDlPath}" download "${episodeId}" --output "${tempM4aFile}" --overwrite --quality audio_only`;
+
+        console.log(`Downloading episode ${episodeId} in the background`);
+        TwitchChannel.downloadingEpisodes[episodeId] = true;
+
+        try {
+            await YtDlpQueue.exec(command, `twitch-download:${episodeId}`, 'heavy', 'twitch-dl', `episode:${episodeId}`);
+
+            // Move temp M4A to final name (atomic operation)
+            fs.renameSync(tempM4aFile, fileName);
+            console.log(`Episode saved at ${fileName}.`);
+        } catch (err) {
+            console.error(`[ERROR] Downloading twitch show ${episodeId} (${err}).`);
             if (fs.existsSync(tempM4aFile)) {
-                console.log(`Episode ${episodeId} is already being downloaded (${tempM4aFile} exists).`);
-                return;
+                fs.unlinkSync(tempM4aFile);
             }
-            
-            const dir = path.dirname(fileName);
-            if (!fs.existsSync(dir)){
-                fs.mkdirSync(dir, { recursive: true });
-            }
-            
-            const opt = {
-                mode: 'text' as const,
-                pythonPath: '/usr/bin/python3',
-                pythonOptions: [], 
-                scriptPath: path.dirname(TwitchChannel.twitchDlPath),
-                args: ['download', episodeId, `--output`, tempM4aFile, `--overwrite`,
-                       `--quality`, `audio_only`]
-              };
-        
-            console.log(`Downloading episode ${episodeId} in the background`);
-            TwitchChannel.downloadingEpisodes[episodeId] = true;
-            PythonShell.run(path.basename(TwitchChannel.twitchDlPath), opt, (err, results) => {
-                delete TwitchChannel.downloadingEpisodes[episodeId];
-                if (err) {
-                    console.error(`[ERROR] Downloading twitch show ${episodeId} (${err}).`);
-                    reject(err);
-                    return;
-                }
-                console.log(`Episode downloaded at ${tempM4aFile}`);
-                
-                // Move temp M4A to final name (atomic operation)
-                fs.renameSync(tempM4aFile, fileName);
-                console.log(`Episode saved at ${fileName}.`);
-                resolve({fileName});
-            });
-    
-        });
+        } finally {
+            delete TwitchChannel.downloadingEpisodes[episodeId];
+        }
     }
 
     public getFileNameForEpisode(directoryRoot: string, episodeId: string) : string | undefined {

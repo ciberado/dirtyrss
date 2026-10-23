@@ -10,6 +10,7 @@ import { LavanguardiaChannel } from './channels/LavanguardiaChannel.js';
 import { YoutubeChannel } from './channels/YoutubeChannel.js';
 import { YoutubePlaylist } from './channels/YoutubePlaylist.js';
 import { YoutubeAudioDownloader } from './utils/YoutubeAudioDownloader.js';
+import { YtDlpQueue } from './utils/YtDlpQueue.js';
 import { Channel } from './channels/Channel.js';
 import { ChapterCacheKey } from './cache/IChapterCache.js';
 
@@ -90,7 +91,8 @@ fastify.get('/health', async (req, reply) => {
             external: used.external,
             rss: used.rss,
             arrayBuffers: used.arrayBuffers
-        }
+        },
+        queue: YtDlpQueue.getStats()
     });
 });
 

@@ -14,6 +14,12 @@ compose-up-memory:
 compose-up-redis:
 	docker compose --profile redis up -d
 
+compose-up-build:
+	docker compose --profile redis up -d --build
+
+compose-health:
+	@docker inspect --format='{{.State.Health.Status}}' dirtyrss
+
 compose-down:
 	docker compose --profile redis down
 

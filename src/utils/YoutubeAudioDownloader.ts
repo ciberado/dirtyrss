@@ -74,9 +74,11 @@ export class YoutubeAudioDownloader {
             // Descarga solo m4a DASH (sin conversión con ffmpeg, mucho más rápido)
             // Usando la cola global para evitar sobrecarga
             const stdout = await YtDlpQueue.exec(
-                `${YoutubeChannel.ytDlpPath} -f "bestaudio[ext=m4a]" -o "${tempPath}" "https://www.youtube.com/watch?v=${videoId}"`,
+                `${YoutubeChannel.ytDlpPath} -f "bestaudio[ext=m4a]" -q --no-progress -o "${tempPath}" "https://www.youtube.com/watch?v=${videoId}"`,
                 `audio-download:${videoId}`,
-                100 * 1024 * 1024
+                'heavy',
+                'yt-dlp',
+                `audio:${videoId}`
             );
             
             /* CODIGO DE CONVERSION COMENTADO (por si hay que volver atrás)

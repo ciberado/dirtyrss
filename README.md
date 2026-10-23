@@ -102,13 +102,18 @@ Puedes configurar DirtyRSS mediante variables de entorno en el `docker-compose.y
 - `PORT` - Puerto del servidor (default: 3000)
 - `CACHE_TYPE` - Tipo de caché: `redis` o `memory` (default: memory)
 - `REDIS_ADDRESS` - Dirección del servidor Redis (default: redis:6379)
-- `YTDLP_MAX_CONCURRENT` - Número máximo de procesos yt-dlp concurrentes (default: 10)
+- `YTDLP_MAX_CONCURRENT` - Procesos yt-dlp concurrentes para metadatos (default: 8)
+- `YTDLP_MAX_CONCURRENT_HEAVY` - Procesos yt-dlp concurrentes para descargas de audio (default: 2)
+- `YTDLP_MAX_PENDING_LIGHT` - Tareas de metadatos máximas en cola (default: 200)
+- `YTDLP_MAX_PENDING_HEAVY` - Descargas de audio máximas en cola (default: 50)
 
 Ejemplo para ajustar la concurrencia de yt-dlp:
 
 ```yaml
 environment:
-  - YTDLP_MAX_CONCURRENT=5  # Reduce la concurrencia para servidores con menos recursos
+  - YTDLP_MAX_CONCURRENT=6         # Metadatos (ligeros)
+  - YTDLP_MAX_CONCURRENT_HEAVY=2   # Descargas de audio (pesadas: CPU/memoria)
+  - YTDLP_MAX_PENDING_HEAVY=30     # Tope de descargas encoladas (backpressure)
 ```
 
 ### Comandos disponibles en Makefile
