@@ -45,6 +45,15 @@ class StallError extends Error {
 }
 
 /**
+ * Indica si un fallo es transitorio (load shed, stall, red, rate limit) y merece reintento.
+ * Los permanentes (members-only, privado, borrado) no: reintentarlos nunca funcionará.
+ */
+export function isTransientError(err: unknown): boolean {
+    const msg = String((err as Error)?.message ?? err);
+    return /Load shed|process stalled|HTTP Error (429|5\d\d)|timed out|ETIMEDOUT|ECONNRESET|Temporary failure/i.test(msg);
+}
+
+/**
  * Cola global para limitar la concurrencia de comandos yt-dlp.
  *
  * Separa las operaciones en dos pools con límites distintos:

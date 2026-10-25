@@ -5,7 +5,7 @@ import { Channel } from './Channel.js';
 import { ChapterCacheKey } from '../cache/IChapterCache.js';
 import { YoutubeChannel } from './YoutubeChannel.js';
 import { YoutubeAudioDownloader } from '../utils/YoutubeAudioDownloader.js';
-import { YtDlpQueue } from '../utils/YtDlpQueue.js';
+import { YtDlpQueue, isTransientError } from '../utils/YtDlpQueue.js';
 import { performance } from 'perf_hooks';
 
 interface YoutubeVideoData {
@@ -361,6 +361,7 @@ export class YoutubePlaylist extends Channel {
             // Cargar en batches (evita saturar YtDlpQueue y el load shedding)
             const chapters: Chapter[] = [];
             let failed = 0;
+            let transientFailed = 0;
             for (let i = 0; i < remainingCount; i += YoutubePlaylist.FETCH_BATCH_SIZE) {
                 const batch = videoIds.slice(i, i + YoutubePlaylist.FETCH_BATCH_SIZE);
                 const results = await Promise.allSettled(
@@ -371,6 +372,7 @@ export class YoutubePlaylist extends Channel {
                         chapters.push(result.value);
                     } else {
                         failed++;
+                        if (isTransientError(result.reason)) transientFailed++;
                     }
                 }
             }
@@ -414,10 +416,12 @@ export class YoutubePlaylist extends Channel {
                         return b.date.getTime() - a.date.getTime();
                     });
                     
-                    // Completa solo si no falta ningún video; si no, queda parcial y se reintenta al caducar (5 min)
+                    // Completa salvo que haya fallos transitorios (load shed, stall, red): entonces
+                    // queda parcial y se reintenta al caducar (5 min). Los permanentes (members-only,
+                    // privados) no cuentan, o la playlist nunca llegaría a cachearse como completa.
                     await Channel.chapterCache.setChapterList(feedCacheKey, {
                         chapters: allChapters,
-                        isComplete: failed === 0 && allChapters.length >= totalVideoCount,
+                        isComplete: transientFailed === 0,
                         lastUpdate: Date.now(),
                         totalVideoCount: totalVideoCount
                     });
