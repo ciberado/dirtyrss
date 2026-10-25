@@ -51,6 +51,10 @@ export class YoutubePlaylist extends Channel {
         return YoutubePlaylist.BADGE_COLOR;
     }
 
+    protected getFeedCacheKey(): string {
+        return `youtube-playlist:${this.playlistId}:${this.chapterUrlPrefix}`;
+    }
+
     protected async fetchChannelInformation(): Promise<void> {
         console.info(`Configuring feed for ${this.playlistUrl}`);
         
@@ -158,6 +162,7 @@ export class YoutubePlaylist extends Channel {
         // Si ya hay un fetch activo, devolver caché
         if (YoutubePlaylist.activeFetches.has(lockKey)) {
             console.log(`Fetch already in progress for ${lockKey}, returning cache`);
+            this.feedCacheable = false;
             
             const firstVideo = await this.getFirstVideo();
             if (firstVideo) {
@@ -217,7 +222,11 @@ export class YoutubePlaylist extends Channel {
             
             // Obtener lista de IDs usando la cola
             const stdout = await YtDlpQueue.exec(
-                `${YoutubeChannel.ytDlpPath} --flat-playlist --print "%(id)s" "${this.playlistUrl}"`
+                `${YoutubeChannel.ytDlpPath} --flat-playlist --print "%(id)s" "${this.playlistUrl}"`,
+                `playlist:${this.playlistId}, list-videos`,
+                'light',
+                'yt-dlp',
+                `list-videos:${this.playlistUrl}`
             );
             
             const videoIds = stdout.split('\n').filter(line => line.trim());
@@ -228,8 +237,9 @@ export class YoutubePlaylist extends Channel {
             let timeoutReached = false;
             let hasBackgroundLoading = false;
             
+            let timeoutHandle: NodeJS.Timeout | undefined;
             const timeoutPromise = new Promise<Chapter[]>((_, reject) => {
-                setTimeout(() => {
+                timeoutHandle = setTimeout(() => {
                     timeoutReached = true;
                     reject(new Error('Timeout reached'));
                 }, YoutubePlaylist.FETCH_TIMEOUT_MS);
@@ -265,6 +275,7 @@ export class YoutubePlaylist extends Channel {
                             const remainingIds = videoIds.slice(i + batch.length);
                             if (remainingIds.length > 0) {
                                 hasBackgroundLoading = true;
+                                this.feedCacheable = false;
                                 this.continueLoadingInBackground(remainingIds, totalVideoCount, firstVideo);
                             }
                             break;
@@ -273,10 +284,12 @@ export class YoutubePlaylist extends Channel {
                     }
                 }
             } catch (error) {
+                clearTimeout(timeoutHandle);
                 if (!timeoutReached) {
                     throw error;
                 }
             }
+            clearTimeout(timeoutHandle);
             
             // Ordenar por playlist_index (orden original de YouTube)
             collectedChapters.sort((a, b) => {
@@ -321,7 +334,11 @@ export class YoutubePlaylist extends Channel {
     private async getFirstVideo(): Promise<{ id: string, title: string } | undefined> {
         try {
             const stdout = await YtDlpQueue.exec(
-                `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.playlistUrl}"`
+                `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.playlistUrl}"`,
+                `playlist:${this.playlistId}, get-first-video`,
+                'light',
+                'yt-dlp',
+                `first-video:${this.playlistUrl}`
             );
             
             const video: YoutubeVideoData = JSON.parse(stdout.split('\n')[0]);
@@ -341,19 +358,25 @@ export class YoutubePlaylist extends Channel {
         console.log(`[BACKGROUND] Starting background fetch for ${remainingCount} remaining videos (total playlist: ${totalVideoCount})`);
         
         try {
-            const results = await Promise.allSettled(
-                videoIds.map((id, idx) => this.fetchChapterData(id, idx + 1, remainingCount, true))
-            );
+            // Cargar en batches (evita saturar YtDlpQueue y el load shedding)
+            const chapters: Chapter[] = [];
+            let failed = 0;
+            for (let i = 0; i < remainingCount; i += YoutubePlaylist.FETCH_BATCH_SIZE) {
+                const batch = videoIds.slice(i, i + YoutubePlaylist.FETCH_BATCH_SIZE);
+                const results = await Promise.allSettled(
+                    batch.map((id, idx) => this.fetchChapterData(id, i + idx + 1, remainingCount, true))
+                );
+                for (const result of results) {
+                    if (result.status === 'fulfilled') {
+                        chapters.push(result.value);
+                    } else {
+                        failed++;
+                    }
+                }
+            }
             
-            // Filtrar solo los exitosos
-            const chapters = results
-                .filter((result): result is PromiseFulfilledResult<Chapter> => result.status === 'fulfilled')
-                .map(result => result.value);
-            
-            // Logear errores
-            const errors = results.filter(result => result.status === 'rejected');
-            if (errors.length > 0) {
-                console.error(`${errors.length} videos failed during background fetch`);
+            if (failed > 0) {
+                console.error(`${failed} videos failed during background fetch`);
             }
             
             const endTime = performance.now();
@@ -376,8 +399,10 @@ export class YoutubePlaylist extends Channel {
                 const cached = await Channel.chapterCache.getChapterList(feedCacheKey);
                 
                 if (cached) {
-                    // Combinar capítulos parciales + nuevos
-                    const allChapters = [...cached.chapters, ...chapters];
+                    // Combinar capítulos parciales + nuevos (sin duplicados por id)
+                    const byId = new Map<string, Chapter>();
+                    for (const ch of [...cached.chapters, ...chapters]) byId.set(ch.id, ch);
+                    const allChapters = Array.from(byId.values());
                     
                     // Ordenar
                     allChapters.sort((a, b) => {
@@ -389,10 +414,10 @@ export class YoutubePlaylist extends Channel {
                         return b.date.getTime() - a.date.getTime();
                     });
                     
-                    // Guardar como completa
+                    // Completa solo si no falta ningún video; si no, queda parcial y se reintenta al caducar (5 min)
                     await Channel.chapterCache.setChapterList(feedCacheKey, {
                         chapters: allChapters,
-                        isComplete: true,
+                        isComplete: failed === 0 && allChapters.length >= totalVideoCount,
                         lastUpdate: Date.now(),
                         totalVideoCount: totalVideoCount
                     });
@@ -430,7 +455,10 @@ export class YoutubePlaylist extends Channel {
             
             const stdout = await YtDlpQueue.exec(
                 `${YoutubeChannel.ytDlpPath} --dump-json "https://www.youtube.com/watch?v=${id}"`,
-                context
+                context,
+                'light',
+                'yt-dlp',
+                `video:${id}`
             );
             
             const video: YoutubeVideoData = JSON.parse(stdout);

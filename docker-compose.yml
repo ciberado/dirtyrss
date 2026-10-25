@@ -29,6 +29,9 @@ services:
     build: .
     container_name: dirtyrss
     restart: unless-stopped
+    # Tope del contenedor completo (Node con heap de 768 MB + yt-dlp/ffmpeg/sharp hijos)
+    mem_limit: 1536m
+    mem_reservation: 512m
     ports:
       - "3000:3000"
     environment:
@@ -38,6 +41,14 @@ services:
       - YTDLP_MAX_CONCURRENT=8
       - YTDLP_MAX_CONCURRENT_HEAVY=2
       - YTDLP_MAX_PENDING_HEAVY=50
+      # info (default) | debug: activa logs por request ([MEMORY]) y por video ([VIDEO])
+      - LOG_LEVEL=info
+    # Rotación de logs: evita que el json-file crezca sin límite
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s

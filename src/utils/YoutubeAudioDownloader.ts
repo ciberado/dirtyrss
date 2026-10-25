@@ -1,8 +1,8 @@
-import fs from 'fs';
+import { promises as fsp } from 'fs';
 import path from 'path';
 import { YoutubeChannel } from '../channels/YoutubeChannel.js';
 import { YtDlpQueue } from './YtDlpQueue.js';
-import { default as got } from 'got';
+import { pathExists } from './FsUtils.js';
 
 interface AudioStreamResult {
     type: 'file';
@@ -20,10 +20,10 @@ export class YoutubeAudioDownloader {
      * @param outputDir - Directorio donde se guardan los archivos
      * @returns Ruta del archivo si existe, null si no
      */
-    static getFileNameForVideo(outputDir: string, videoId: string): string | null {
+    static async getFileNameForVideo(outputDir: string, videoId: string): Promise<string | null> {
         const outputPath = path.join(outputDir, `${videoId}.m4a`);
         
-        if (fs.existsSync(outputPath)) {
+        if (await pathExists(outputPath)) {
             return outputPath;
         }
         
@@ -47,21 +47,23 @@ export class YoutubeAudioDownloader {
         const tempPath = path.join(outputDir, `${videoId}.tmp.m4a`);
         
         // Verificar si ya está siendo descargado
-        if (fs.existsSync(tempPath)) {
+        if (await pathExists(tempPath)) {
             console.log(`[YOUTUBE AUDIO] Video ${videoId} is already being downloaded (${tempPath} exists)`);
             return;
         }
         
+        // Re-comprobar tras el await: otra petición pudo marcarlo mientras tanto
+        if (this.downloadingVideos[videoId]) {
+            return;
+        }
         this.downloadingVideos[videoId] = true;
         
         try {
-            // Crear directorio si no existe
-            if (!fs.existsSync(outputDir)) {
-                fs.mkdirSync(outputDir, { recursive: true });
-            }
+            // Crear directorio si no existe (recursive no falla si ya existe)
+            await fsp.mkdir(outputDir, { recursive: true });
             
             // Verificar si ya existe el archivo final
-            if (fs.existsSync(outputPath)) {
+            if (await pathExists(outputPath)) {
                 console.log(`[YOUTUBE AUDIO] File already exists for ${videoId}`);
                 return;
             }
@@ -74,11 +76,12 @@ export class YoutubeAudioDownloader {
             // Descarga solo m4a DASH (sin conversión con ffmpeg, mucho más rápido)
             // Usando la cola global para evitar sobrecarga
             const stdout = await YtDlpQueue.exec(
-                `${YoutubeChannel.ytDlpPath} -f "bestaudio[ext=m4a]" -q --no-progress -o "${tempPath}" "https://www.youtube.com/watch?v=${videoId}"`,
+                `${YoutubeChannel.ytDlpPath} -f "bestaudio[ext=m4a]" -q --progress --newline --progress-delta 2 -o "${tempPath}" "https://www.youtube.com/watch?v=${videoId}"`,
                 `audio-download:${videoId}`,
                 'heavy',
                 'yt-dlp',
-                `audio:${videoId}`
+                `audio:${videoId}`,
+                tempPath
             );
             
             /* CODIGO DE CONVERSION COMENTADO (por si hay que volver atrás)
@@ -97,15 +100,13 @@ export class YoutubeAudioDownloader {
             if (stdout) console.log(`[YOUTUBE AUDIO] stdout: ${stdout.substring(0, 500)}`);
             
             // Mover archivo temporal al nombre final (operación atómica)
-            fs.renameSync(tempPath, outputPath);
+            await fsp.rename(tempPath, outputPath);
             console.log(`[YOUTUBE AUDIO] Video saved at ${outputPath}`);
             
         } catch (error) {
             console.error(`[YOUTUBE AUDIO] Error downloading ${videoId}:`, error);
             // Limpiar archivo temporal si existe
-            if (fs.existsSync(tempPath)) {
-                fs.unlinkSync(tempPath);
-            }
+            await fsp.rm(tempPath, { force: true });
         } finally {
             delete this.downloadingVideos[videoId];
         }
@@ -121,15 +122,17 @@ export class YoutubeAudioDownloader {
             const outputPath = path.join(outputDir, `${videoId}.m4a`);
             
             // Si el archivo ya existe, devolver su tamaño
-            if (fs.existsSync(outputPath)) {
-                const stat = fs.statSync(outputPath);
+            try {
+                const stat = await fsp.stat(outputPath);
                 return stat.size;
+            } catch (err) {
+                if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+                    // Si no existe, devolver 0
+                    // El archivo se descargará cuando el usuario lo reproduzca
+                    return 0;
+                }
+                throw err;
             }
-            
-            // Si no existe, devolver 0
-            // El archivo se descargará cuando el usuario lo reproduzca
-            return 0;
-            
         } catch (error) {
             console.error(`[YOUTUBE AUDIO] Error getting audio size for ${videoId}:`, error);
             return 0;

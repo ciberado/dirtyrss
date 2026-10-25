@@ -4,6 +4,7 @@ import { ChapterCacheKey } from '../cache/IChapterCache.js';
 import { ExternalTools } from '../utils/ExternalTools.js';
 import { YoutubeAudioDownloader } from '../utils/YoutubeAudioDownloader.js';
 import { YtDlpQueue } from '../utils/YtDlpQueue.js';
+import { DEBUG_ENABLED } from '../utils/Logger.js';
 import { performance } from 'perf_hooks';
 import { default as got } from 'got';
 import * as cheerio from 'cheerio';
@@ -55,6 +56,10 @@ export class YoutubeChannel extends Channel {
         return YoutubeChannel.BADGE_COLOR;
     }
 
+    protected getFeedCacheKey(): string {
+        return `youtube-channel:${this.channelId}:${this.chapterUrlPrefix}`;
+    }
+
     protected async fetchChannelInformation(): Promise<void> {
         console.info(`Configuring feed for ${this.channelUrl}`);
         
@@ -65,7 +70,10 @@ export class YoutubeChannel extends Channel {
             // Obtener metadata básica del primer video
             const stdout = await YtDlpQueue.exec(
                 `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.channelUrl}/videos"`,
-                `channel:${this.channelId}, first-video`
+                `channel:${this.channelId}, first-video`,
+                'light',
+                'yt-dlp',
+                `first-video:${this.channelUrl}`
             );
             
             const videoData: YoutubeVideoData = JSON.parse(stdout.split('\n')[0]);
@@ -132,6 +140,7 @@ export class YoutubeChannel extends Channel {
         // Si ya hay un fetch activo, intentar devolver caché parcial o completa
         if (YoutubeChannel.activeFetches.has(lockKey)) {
             console.log(`Fetch already in progress for ${lockKey}, checking for cached data...`);
+            this.feedCacheable = false;
             
             const firstVideo = await this.getFirstVideo();
             if (firstVideo) {
@@ -181,6 +190,7 @@ export class YoutubeChannel extends Channel {
                         // Caché parcial, verificar si es reciente (< 5 min)
                         const age = Date.now() - cachedFeed.lastUpdate;
                         if (age < 5 * 60 * 1000) {
+                            this.feedCacheable = false;
                             console.log(`Recent partial cache (${Math.round(age / 1000)}s old), returning ${cachedFeed.chapters.length} chapters`);
                             return cachedFeed.chapters;
                         }
@@ -194,7 +204,10 @@ export class YoutubeChannel extends Channel {
             // Obtener lista de IDs usando la cola
             const stdout = await YtDlpQueue.exec(
                 `${YoutubeChannel.ytDlpPath} --flat-playlist --print "%(id)s" "${this.channelUrl}/videos"`,
-                `channel:${this.channelId}, list-videos`
+                `channel:${this.channelId}, list-videos`,
+                'light',
+                'yt-dlp',
+                `list-videos:${this.channelUrl}`
             );
             
             const videoIds = stdout.split('\n').filter(line => line.trim());
@@ -205,8 +218,9 @@ export class YoutubeChannel extends Channel {
             let timeoutReached = false;
             let hasBackgroundLoading = false;
             
+            let timeoutHandle: NodeJS.Timeout | undefined;
             const timeoutPromise = new Promise<Chapter[]>((_, reject) => {
-                setTimeout(() => {
+                timeoutHandle = setTimeout(() => {
                     timeoutReached = true;
                     reject(new Error('Timeout reached'));
                 }, YoutubeChannel.FETCH_TIMEOUT_MS);
@@ -263,6 +277,7 @@ export class YoutubeChannel extends Channel {
                             const remainingIds = videoIds.slice(i + batch.length);
                             if (remainingIds.length > 0) {
                                 hasBackgroundLoading = true;
+                                this.feedCacheable = false;
                                 // Background SIN esperar (fire and forget)
                                 this.continueLoadingInBackground(remainingIds, totalVideoCount, firstVideo).catch(err => {
                                     console.error('Background loading error:', err);
@@ -274,10 +289,12 @@ export class YoutubeChannel extends Channel {
                     }
                 }
             } catch (error) {
+                clearTimeout(timeoutHandle);
                 if (!timeoutReached) {
                     throw error;
                 }
             }
+            clearTimeout(timeoutHandle);
             
             // Ordenar por playlist_index (orden original de YouTube)
             collectedChapters.sort((a, b) => {
@@ -326,7 +343,10 @@ export class YoutubeChannel extends Channel {
         try {
             const stdout = await YtDlpQueue.exec(
                 `${YoutubeChannel.ytDlpPath} --dump-json --playlist-items 1 "${this.channelUrl}/videos"`,
-                `channel:${this.channelId}, get-first-video`
+                `channel:${this.channelId}, get-first-video`,
+                'light',
+                'yt-dlp',
+                `first-video:${this.channelUrl}`
             );
             
             const video: YoutubeVideoData = JSON.parse(stdout.split('\n')[0]);
@@ -346,19 +366,25 @@ export class YoutubeChannel extends Channel {
         console.log(`[BACKGROUND] Starting background fetch for ${remainingCount} remaining videos (total channel: ${totalVideoCount})`);
         
         try {
-            // Cargar videos restantes con progreso
-            const results = await Promise.allSettled(
-                videoIds.map((id, idx) => this.fetchChapterData(id, idx + 1, remainingCount, true))
-            );
+            // Cargar videos restantes en batches (evita saturar YtDlpQueue y el load shedding)
+            const newChapters: Chapter[] = [];
+            let failed = 0;
+            for (let i = 0; i < remainingCount; i += YoutubeChannel.FETCH_BATCH_SIZE) {
+                const batch = videoIds.slice(i, i + YoutubeChannel.FETCH_BATCH_SIZE);
+                const results = await Promise.allSettled(
+                    batch.map((id, idx) => this.fetchChapterData(id, i + idx + 1, remainingCount, true))
+                );
+                for (const result of results) {
+                    if (result.status === 'fulfilled') {
+                        newChapters.push(result.value);
+                    } else {
+                        failed++;
+                    }
+                }
+            }
             
-            const newChapters = results
-                .filter((result): result is PromiseFulfilledResult<Chapter> => result.status === 'fulfilled')
-                .map(result => result.value);
-            
-            // Logear errores
-            const errors = results.filter(result => result.status === 'rejected');
-            if (errors.length > 0) {
-                console.error(`${errors.length} videos failed during background fetch`);
+            if (failed > 0) {
+                console.error(`${failed} videos failed during background fetch`);
             }
             
             const endTime = performance.now();
@@ -370,8 +396,10 @@ export class YoutubeChannel extends Channel {
                 // Obtener caché parcial existente
                 const cached = await Channel.chapterCache.getChapterList(feedCacheKey);
                 if (cached) {
-                    // Combinar capítulos parciales + nuevos
-                    const allChapters = [...cached.chapters, ...newChapters];
+                    // Combinar capítulos parciales + nuevos (sin duplicados por id)
+                    const byId = new Map<string, Chapter>();
+                    for (const ch of [...cached.chapters, ...newChapters]) byId.set(ch.id, ch);
+                    const allChapters = Array.from(byId.values());
                     
                     // Ordenar
                     allChapters.sort((a, b) => {
@@ -383,10 +411,10 @@ export class YoutubeChannel extends Channel {
                         return b.date.getTime() - a.date.getTime();
                     });
                     
-                    // Guardar como completa
+                    // Completa solo si no falta ningún video; si no, queda parcial y se reintenta al caducar (5 min)
                     await Channel.chapterCache.setChapterList(feedCacheKey, {
                         chapters: allChapters,
-                        isComplete: true,
+                        isComplete: failed === 0 && allChapters.length >= totalVideoCount,
                         lastUpdate: Date.now(),
                         totalVideoCount: totalVideoCount
                     });
@@ -424,7 +452,10 @@ export class YoutubeChannel extends Channel {
             
             const stdout = await YtDlpQueue.exec(
                 `${YoutubeChannel.ytDlpPath} --dump-json "https://www.youtube.com/watch?v=${id}"`,
-                context
+                context,
+                'light',
+                'yt-dlp',
+                `video:${id}`
             );
             
             const video: YoutubeVideoData = JSON.parse(stdout);
@@ -469,12 +500,13 @@ export class YoutubeChannel extends Channel {
         const day = parseInt(dateStr.substring(6, 8));
         const result = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
         
-        // Formatear fecha como YYYYMMDDHHmmss
-        const formattedDate = result.toISOString().replace(/[-:]/g, '').replace('T', '').substring(0, 14);
-        const durationStr = duration ? this.formatDuration(duration) : 'unknown';
-        const titleStr = title ? title.substring(0, 50) : 'unknown';
-        
-        console.log(`[VIDEO] ${formattedDate} | ${durationStr} | ${titleStr}`);
+        if (DEBUG_ENABLED) {
+            // Formatear fecha como YYYYMMDDHHmmss
+            const formattedDate = result.toISOString().replace(/[-:]/g, '').replace('T', '').substring(0, 14);
+            const durationStr = duration ? this.formatDuration(duration) : 'unknown';
+            const titleStr = title ? title.substring(0, 50) : 'unknown';
+            console.log(`[VIDEO] ${formattedDate} | ${durationStr} | ${titleStr}`);
+        }
         return result;
     }
     

@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { pathExists } from '../utils/FsUtils.js';
 import path from 'path';
 
 import * as cheerio from "cheerio"; 
@@ -59,6 +60,10 @@ export class TwitchChannel extends Channel{
     
     protected getBadgeColor(): string | undefined {
         return TwitchChannel.BADGE_COLOR;
+    }
+
+    protected getFeedCacheKey(): string {
+        return `twitch:${this.username}:${this.chapterUrlPrefix}`;
     }
 
     private async fetchChannelMetadata(url: string, maxAttempts: number = 3, delayMs: number = 2000): Promise<{ imageUrl?: string, description?: string }> {
@@ -160,11 +165,9 @@ export class TwitchChannel extends Channel{
         let fileSize = 5 * 60 * 1024 * 1024;
         const filePath = `${this.staticFilesPath}/twitch/chapters/${this.username}/${tc.id}.m4a`;
         try {
-            if (fs.existsSync(filePath)) {
-                fileSize = fs.statSync(filePath).size;
-            }
+            fileSize = (await fs.promises.stat(filePath)).size;
         } catch (err) {
-            // Use default size
+            // No existe o no se puede leer: usar tamaño por defecto
         }
         
         const chapter = new Chapter(
@@ -194,6 +197,11 @@ export class TwitchChannel extends Channel{
         return chapters;
     }
 
+    // Método aparte para que TS no estreche el tipo entre los awaits
+    private static isDownloading(episodeId: string): boolean {
+        return TwitchChannel.downloadingEpisodes[episodeId] === true;
+    }
+
     private async downloadEpisode(episodeId : string, fileName: string) {
         if (TwitchChannel.downloadingEpisodes[episodeId] === true) {
             console.log(`Episode ${episodeId} already being downloaded.`);
@@ -201,15 +209,17 @@ export class TwitchChannel extends Channel{
         }
 
         const tempM4aFile = fileName.replace('.m4a', '.tmp.m4a');
-        if (fs.existsSync(tempM4aFile)) {
+        if (await pathExists(tempM4aFile)) {
             console.log(`Episode ${episodeId} is already being downloaded (${tempM4aFile} exists).`);
             return;
         }
 
-        const dir = path.dirname(fileName);
-        if (!fs.existsSync(dir)){
-            fs.mkdirSync(dir, { recursive: true });
+        // Re-comprobar tras el await: otra petición pudo empezar la descarga mientras tanto
+        if (TwitchChannel.isDownloading(episodeId)) {
+            return;
         }
+
+        await fs.promises.mkdir(path.dirname(fileName), { recursive: true });
 
         const command = `/usr/bin/python3 "${TwitchChannel.twitchDlPath}" download "${episodeId}" --output "${tempM4aFile}" --overwrite --quality audio_only`;
 
@@ -217,27 +227,25 @@ export class TwitchChannel extends Channel{
         TwitchChannel.downloadingEpisodes[episodeId] = true;
 
         try {
-            await YtDlpQueue.exec(command, `twitch-download:${episodeId}`, 'heavy', 'twitch-dl', `episode:${episodeId}`);
+            await YtDlpQueue.exec(command, `twitch-download:${episodeId}`, 'heavy', 'twitch-dl', `episode:${episodeId}`, tempM4aFile);
 
             // Move temp M4A to final name (atomic operation)
-            fs.renameSync(tempM4aFile, fileName);
+            await fs.promises.rename(tempM4aFile, fileName);
             console.log(`Episode saved at ${fileName}.`);
         } catch (err) {
             console.error(`[ERROR] Downloading twitch show ${episodeId} (${err}).`);
-            if (fs.existsSync(tempM4aFile)) {
-                fs.unlinkSync(tempM4aFile);
-            }
+            await fs.promises.rm(tempM4aFile, { force: true });
         } finally {
             delete TwitchChannel.downloadingEpisodes[episodeId];
         }
     }
 
-    public getFileNameForEpisode(directoryRoot: string, episodeId: string) : string | undefined {
+    public async getFileNameForEpisode(directoryRoot: string, episodeId: string) : Promise<string | undefined> {
         const fileName = `${directoryRoot}/twitch/chapters/${this.username}/${episodeId}.m4a`;
         console.log(`Ensuring ${fileName} is available.`);
 
         // check if the file exists, or return the default one
-        if (fs.existsSync(fileName) === false) {
+        if (!(await pathExists(fileName))) {
             console.log(`Episode ${episodeId} not available locally.`);
             this.downloadEpisode(episodeId, fileName);
             return;

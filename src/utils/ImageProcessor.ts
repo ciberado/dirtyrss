@@ -1,7 +1,13 @@
 import fs from 'fs';
+import { pathExists } from './FsUtils.js';
 import path from 'path';
 import sharp from 'sharp';
 import { default as got } from 'got';
+
+// Las imágenes se procesan una vez y se guardan en disco: la caché de libvips no aporta nada
+// y los hilos por operación se limitan para no competir con yt-dlp/ffmpeg.
+sharp.cache(false);
+sharp.concurrency(Math.max(1, parseInt(process.env.SHARP_CONCURRENCY ?? '2') || 2));
 
 export interface PlatformWatermarkConfig {
     logoPath: string;          // Ruta al logo SVG o PNG
@@ -39,8 +45,8 @@ export class ImageProcessor {
             const sanitizedChannelId = channelId.replace(/\s+/g, '_');
             
             // Buscar imágenes existentes del canal
-            if (fs.existsSync(coversDir)) {
-                const files = fs.readdirSync(coversDir)
+            if (await pathExists(coversDir)) {
+                const files = (await fs.promises.readdir(coversDir))
                     .filter(f => f.startsWith(`${sanitizedChannelId}_`) && f.endsWith('.jpg'));
                 
                 if (files.length > 0) {
@@ -55,11 +61,11 @@ export class ImageProcessor {
                     }
                     
                     // Borrar versiones antiguas
-                    files.forEach(f => {
+                    await Promise.all(files.map(async f => {
                         const filePath = `${coversDir}/${f}`;
-                        fs.unlinkSync(filePath);
+                        await fs.promises.rm(filePath, { force: true });
                         console.log(`Deleted old image: ${filePath}`);
-                    });
+                    }));
                 }
             }
             
@@ -68,10 +74,7 @@ export class ImageProcessor {
             const processedImagePath = `${coversDir}/${sanitizedChannelId}_${timestamp}.jpg`;
             
             // Crear directorio si no existe
-            const dir = path.dirname(processedImagePath);
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-            }
+            await fs.promises.mkdir(path.dirname(processedImagePath), { recursive: true });
             
             console.log(`Processing channel image for ${platformName}/${channelId}`);
             const response = await got(originalImageUrl).buffer();
@@ -88,7 +91,7 @@ export class ImageProcessor {
                 .toBuffer();
             
             // Si no existe el logo, guardar solo la imagen cuadrada
-            if (!fs.existsSync(config.logoPath)) {
+            if (!(await pathExists(config.logoPath))) {
                 console.warn(`Logo not found at ${config.logoPath}, skipping watermark`);
                 await sharp(squareImageBuffer).jpeg({ quality: 90 }).toFile(processedImagePath);
                 return `${this.chapterUrlPrefix}/${platformName}/covers/${sanitizedChannelId}_${timestamp}.jpg`;
@@ -133,7 +136,7 @@ export class ImageProcessor {
         const logoSize = Math.floor(badgeSize * 0.45); // 45% del tamaño del badge (más pequeño)
         
         // Leer el SVG y forzar color blanco
-        const logoSvgString = fs.readFileSync(config.logoPath, 'utf-8');
+        const logoSvgString = await fs.promises.readFile(config.logoPath, 'utf-8');
         
         // Envolver el SVG en un grupo con fill blanco
         const whiteLogo = logoSvgString
@@ -148,7 +151,7 @@ export class ImageProcessor {
         // Cargar la máscara PNG del badge (desde directorio original)
         const shapePath = `${path.resolve('.')}/assets/badge-shape.png`;
         
-        if (!fs.existsSync(shapePath)) {
+        if (!(await pathExists(shapePath))) {
             console.warn(`Badge shape not found at ${shapePath}, using SVG fallback`);
             const badgeSvg = await this.createBadgeWithLogo(config.badgeShape, badgeSize, config.backgroundColor, logoBuffer, logoSize);
             return await sharp(Buffer.from(badgeSvg)).png().toBuffer();

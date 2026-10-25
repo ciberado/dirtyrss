@@ -6,12 +6,23 @@ import { InMemoryChapterCache } from '../cache/InMemoryChapterCache.js';
 import { RedisChapterCache } from '../cache/RedisChapterCache.js';
 import { ImageProcessor } from '../utils/ImageProcessor.js';
 import * as path from 'path';
-import * as fs from 'fs';
+import { pathExists } from '../utils/FsUtils.js';
 
 export abstract class Channel {
     
     public static chapterCache: IChapterCache;
     protected static cacheInitialized: boolean = false;
+    private static cacheInitPromise?: Promise<void>;
+
+    // Caché del XML del feed (TTL corto, configurable; 0 = desactivada)
+    private static readonly FEED_CACHE_TTL_MS: number =
+        Math.max(0, parseInt(process.env.FEED_CACHE_TTL_SECONDS ?? '300') || 0) * 1000;
+    private static readonly FEED_CACHE_MAX_ENTRIES: number = 100;
+    private static feedCache = new Map<string, { xml: string; expires: number }>();
+    private static feedInFlight = new Map<string, Promise<string | undefined>>();
+
+    // Las subclases lo ponen a false cuando el feed es parcial/vacío para no cachearlo
+    protected feedCacheable: boolean = true;
 
     protected channelName: string;
     protected description?: string;
@@ -26,22 +37,33 @@ export abstract class Channel {
         this.channelName = channelName;
     }
 
-    protected static async initializeCache(): Promise<void> {
+    protected static initializeCache(): Promise<void> {
         if (Channel.cacheInitialized) {
-            return;
+            return Promise.resolve();
         }
 
-        const cacheType = process.env.CACHE_TYPE || 'memory';
-        
-        if (cacheType === 'redis') {
-            console.info('Initializing Redis cache...');
-            Channel.chapterCache = await RedisChapterCache.create();
-        } else {
-            console.info('Initializing in-memory cache...');
-            Channel.chapterCache = new InMemoryChapterCache();
+        // Todas las peticiones simultáneas esperan a la misma inicialización
+        if (!Channel.cacheInitPromise) {
+            Channel.cacheInitPromise = (async () => {
+                const cacheType = process.env.CACHE_TYPE || 'memory';
+
+                if (cacheType === 'redis') {
+                    console.info('Initializing Redis cache...');
+                    Channel.chapterCache = await RedisChapterCache.create();
+                } else {
+                    console.info('Initializing in-memory cache...');
+                    Channel.chapterCache = new InMemoryChapterCache();
+                }
+
+                Channel.cacheInitialized = true;
+            })().catch((err) => {
+                // Permite reintentar en la siguiente petición si falla (p. ej. Redis caído)
+                Channel.cacheInitPromise = undefined;
+                throw err;
+            });
         }
-        
-        Channel.cacheInitialized = true;
+
+        return Channel.cacheInitPromise;
     }
 
     protected abstract fetchChannelInformation() : Promise<void>;
@@ -76,7 +98,7 @@ export abstract class Channel {
         }
         
         const fullLogoPath = `${path.resolve('.')}/${logoPath}`;
-        if (!fs.existsSync(fullLogoPath)) {
+        if (!(await pathExists(fullLogoPath))) {
             console.warn(`Logo not found at ${fullLogoPath}, skipping watermark`);
             return;
         }
@@ -96,7 +118,69 @@ export abstract class Channel {
         );
     }
 
-    public async generateFeed(): Promise<string | undefined> {
+    /**
+     * Clave de la caché del feed XML. Las subclases deben añadir todo lo que
+     * cambie el XML generado (p. ej. el prefijo de URL de los capítulos).
+     */
+    protected getFeedCacheKey(): string {
+        return `${this.constructor.name}:${this.channelName}`;
+    }
+
+    private static storeFeed(key: string, xml: string): void {
+        const now = Date.now();
+        if (Channel.feedCache.size >= Channel.FEED_CACHE_MAX_ENTRIES) {
+            for (const [k, v] of Channel.feedCache) {
+                if (v.expires <= now) Channel.feedCache.delete(k);
+            }
+            // Si sigue lleno, descartar la entrada más antigua (orden de inserción)
+            if (Channel.feedCache.size >= Channel.FEED_CACHE_MAX_ENTRIES) {
+                const oldest = Channel.feedCache.keys().next().value;
+                if (oldest !== undefined) Channel.feedCache.delete(oldest);
+            }
+        }
+        Channel.feedCache.set(key, { xml, expires: now + Channel.FEED_CACHE_TTL_MS });
+    }
+
+    /**
+     * Devuelve el feed XML con caché de corta duración y deduplicación de
+     * peticiones simultáneas (varias peticiones iguales comparten el trabajo).
+     */
+    public generateFeed(): Promise<string | undefined> {
+        const key = this.getFeedCacheKey();
+
+        const hit = Channel.feedCache.get(key);
+        if (hit) {
+            if (hit.expires > Date.now()) {
+                console.info(`[FEED CACHE] hit ${key}`);
+                return Promise.resolve(hit.xml);
+            }
+            Channel.feedCache.delete(key);
+        }
+
+        const inFlight = Channel.feedInFlight.get(key);
+        if (inFlight) {
+            console.info(`[FEED CACHE] joining in-flight request ${key}`);
+            return inFlight;
+        }
+
+        const promise: Promise<string | undefined> = this.buildFeed()
+            .then((xml) => {
+                if (xml !== undefined && this.feedCacheable && Channel.FEED_CACHE_TTL_MS > 0) {
+                    Channel.storeFeed(key, xml);
+                }
+                return xml;
+            })
+            .finally(() => {
+                if (Channel.feedInFlight.get(key) === promise) {
+                    Channel.feedInFlight.delete(key);
+                }
+            });
+
+        Channel.feedInFlight.set(key, promise);
+        return promise;
+    }
+
+    protected async buildFeed(): Promise<string | undefined> {
         console.info(`Creating rss feed.`);
 
         await Channel.initializeCache();

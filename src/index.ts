@@ -13,6 +13,7 @@ import { YoutubeAudioDownloader } from './utils/YoutubeAudioDownloader.js';
 import { YtDlpQueue } from './utils/YtDlpQueue.js';
 import { Channel } from './channels/Channel.js';
 import { ChapterCacheKey } from './cache/IChapterCache.js';
+import { DEBUG_ENABLED } from './utils/Logger.js';
 
 const FASTIFY_PORT = parseInt(process.env.PORT!) || 3000;
 
@@ -43,21 +44,23 @@ async function logChapterDownloadAttempt(platform: string, showId: string, episo
     }
 }
 
-// Memory monitoring hook
-fastify.addHook('onResponse', (req, reply, done) => {
-    const used = process.memoryUsage();
-    const rssMB = Math.round(used.rss / 1024 / 1024);
-    
-    // Cloudflare usa CF-Connecting-IP, sino X-Forwarded-For, sino req.ip
-    const cfIp = req.headers['cf-connecting-ip'];
-    const xForwardedFor = req.headers['x-forwarded-for'];
-    const clientIp = cfIp || 
-                     (typeof xForwardedFor === 'string' ? xForwardedFor.split(',')[0].trim() : xForwardedFor?.[0]) || 
-                     req.ip;
-    
-    console.log(`[MEMORY] ${rssMB}MB | ${clientIp} | ${req.method} ${req.url} - ${reply.statusCode}`);
-    done();
-});
+// Log por request con memoria (solo con LOG_LEVEL=debug)
+if (DEBUG_ENABLED) {
+    fastify.addHook('onResponse', (req, reply, done) => {
+        const used = process.memoryUsage();
+        const rssMB = Math.round(used.rss / 1024 / 1024);
+        
+        // Cloudflare usa CF-Connecting-IP, sino X-Forwarded-For, sino req.ip
+        const cfIp = req.headers['cf-connecting-ip'];
+        const xForwardedFor = req.headers['x-forwarded-for'];
+        const clientIp = cfIp || 
+                         (typeof xForwardedFor === 'string' ? xForwardedFor.split(',')[0].trim() : xForwardedFor?.[0]) || 
+                         req.ip;
+        
+        console.log(`[MEMORY] ${rssMB}MB | ${clientIp} | ${req.method} ${req.url} - ${reply.statusCode}`);
+        done();
+    });
+}
 
 if (fs.existsSync(FASTIFY_STATIC) === false) {
     fs.mkdirSync(FASTIFY_STATIC, { recursive : true});
@@ -165,7 +168,7 @@ fastify.get<{Params : YoutubeChannelAudioParamType}>('/youtube/channel/:channelI
         // Log del intento de descarga con información de caché
         await logChapterDownloadAttempt('youtube', channelId, videoId);
         
-        const fileName = YoutubeAudioDownloader.getFileNameForVideo(audioDir, videoId);
+        const fileName = await YoutubeAudioDownloader.getFileNameForVideo(audioDir, videoId);
         
         if (!fileName) {
             console.info(`[YOUTUBE AUDIO] Video ${videoId} not ready yet, triggering download`);
@@ -174,7 +177,7 @@ fastify.get<{Params : YoutubeChannelAudioParamType}>('/youtube/channel/:channelI
         }
         
         // Servir el archivo con soporte de range requests
-        const stat = fs.statSync(fileName);
+        const stat = await fs.promises.stat(fileName);
         const fileSize = stat.size;
         const range = req.headers.range;
         
@@ -217,7 +220,7 @@ fastify.get<{Params : YoutubePlaylistAudioParamType}>('/youtube/playlist/:playli
         // Log del intento de descarga con información de caché
         await logChapterDownloadAttempt('youtube-playlist', playlistId, videoId);
         
-        const fileName = YoutubeAudioDownloader.getFileNameForVideo(audioDir, videoId);
+        const fileName = await YoutubeAudioDownloader.getFileNameForVideo(audioDir, videoId);
         
         if (!fileName) {
             console.info(`[YOUTUBE AUDIO] Video ${videoId} not ready yet, triggering download`);
@@ -226,7 +229,7 @@ fastify.get<{Params : YoutubePlaylistAudioParamType}>('/youtube/playlist/:playli
         }
         
         // Servir el archivo con soporte de range requests
-        const stat = fs.statSync(fileName);
+        const stat = await fs.promises.stat(fileName);
         const fileSize = stat.size;
         const range = req.headers.range;
         
@@ -311,7 +314,7 @@ fastify.get<{Params : TwitchParamType}>('/twitch/chapters/:showId/:episodeId.m4a
         await logChapterDownloadAttempt('twitch', showId, episodeId);
         
         const tc = new TwitchChannel(showId, chapterUrlPrefix, FASTIFY_STATIC);
-        const fileName = tc.getFileNameForEpisode(FASTIFY_STATIC, episodeId);
+        const fileName = await tc.getFileNameForEpisode(FASTIFY_STATIC, episodeId);
         console.info("File name", fileName);
         
         if (!fileName) {
@@ -319,7 +322,7 @@ fastify.get<{Params : TwitchParamType}>('/twitch/chapters/:showId/:episodeId.m4a
             return reply.code(503).type('text/html').send(`Episode ${episodeId} is being downloaded. Please try again in a few minutes.`);
         }
         
-        const stat = fs.statSync(fileName);
+        const stat = await fs.promises.stat(fileName);
         const fileSize = stat.size;
         const range = req.headers.range;
         

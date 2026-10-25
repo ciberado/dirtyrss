@@ -56,6 +56,10 @@ export class IVooxChannel extends Channel {
         return IVooxChannel.BADGE_COLOR;
     }
 
+    protected getFeedCacheKey(): string {
+        return `ivoox:${this.channelName}:${this.chapterUrlPrefix}`;
+    }
+
     private fromSpanishDate(text: string): Date {
         const parts = text.split(/[\/·:]/);
         const day = parseInt(parts[0], 10);
@@ -116,6 +120,7 @@ export class IVooxChannel extends Channel {
         // Si ya hay un fetch activo, devolver caché
         if (IVooxChannel.activeFetches.has(lockKey)) {
             console.log(`Fetch already in progress for ${lockKey}, returning cached data`);
+            this.feedCacheable = false;
             const cachedChapters = await this.getCachedFeed();
             if (cachedChapters) {
                 return cachedChapters;
@@ -164,8 +169,9 @@ export class IVooxChannel extends Channel {
             let timeoutReached = false;
             let hasBackgroundLoading = false;
         
+            let timeoutHandle: NodeJS.Timeout | undefined;
             const timeoutPromise = new Promise<Chapter[]>((_, reject) => {
-                setTimeout(() => {
+                timeoutHandle = setTimeout(() => {
                     timeoutReached = true;
                     reject(new Error('Timeout reached'));
                 }, IVooxChannel.IVOOX_FETCH_TIMEOUT_MS);
@@ -189,6 +195,7 @@ export class IVooxChannel extends Channel {
                             const remainingPages = pageNumbers.slice(i + batch.length);
                             if (remainingPages.length > 0) {
                                 hasBackgroundLoading = true;
+                                this.feedCacheable = false;
                                 this.continueLoadingInBackground(remainingPages, collectedChapters, firstChapter);
                             }
                             break;
@@ -197,10 +204,12 @@ export class IVooxChannel extends Channel {
                     }
                 }
             } catch (error) {
+                clearTimeout(timeoutHandle);
                 if (!timeoutReached) {
                     throw error;
                 }
             }
+            clearTimeout(timeoutHandle);
         
             collectedChapters.sort((a, b) => b.date.getTime() - a.date.getTime());
 
@@ -410,7 +419,7 @@ export class IVooxChannel extends Channel {
         return got(url, IVooxChannel.IVOOX_REQUEST_OPTIONS);
     }
 
-    public async generateFeed(): Promise<string | undefined> {
+    protected async buildFeed(): Promise<string | undefined> {
         console.info(`Creating rss feed.`);
         console.debug(`Getting channel ${this.channelName} url.`);
         this.channelUrl = await this.findChannelUrl();
@@ -419,7 +428,7 @@ export class IVooxChannel extends Channel {
             return;
         }
         console.info(`Channel url is ${this.channelUrl}.`);
-        return super.generateFeed();
+        return super.buildFeed();
     }
 
     private static limit = pRateLimit({
