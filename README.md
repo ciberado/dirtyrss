@@ -106,6 +106,10 @@ Puedes configurar DirtyRSS mediante variables de entorno en el `docker-compose.y
 - `YTDLP_MAX_CONCURRENT_HEAVY` - Procesos yt-dlp concurrentes para descargas de audio (default: 2)
 - `YTDLP_MAX_PENDING_LIGHT` - Tareas de metadatos máximas en cola (default: 200)
 - `YTDLP_MAX_PENDING_HEAVY` - Descargas de audio máximas en cola (default: 50)
+- `YTDLP_STALL_LIGHT_S` - Segundos sin salida antes de matar y relanzar un yt-dlp de metadatos (default: 45, 0 = desactivado)
+- `YTDLP_STALL_HEAVY_S` - Ídem para descargas de audio (default: 60, 0 = desactivado)
+- `YTDLP_STALL_TWITCH_S` - Ídem para Twitch (default: 180, 0 = desactivado)
+- `YTDLP_MAX_RETRIES` - Reintentos de un yt-dlp que falla o se cuelga (default: 2)
 
 Ejemplo para ajustar la concurrencia de yt-dlp:
 
@@ -115,6 +119,13 @@ environment:
   - YTDLP_MAX_CONCURRENT_HEAVY=2   # Descargas de audio (pesadas: CPU/memoria)
   - YTDLP_MAX_PENDING_HEAVY=30     # Tope de descargas encoladas (backpressure)
 ```
+
+#### Caché de feeds de YouTube
+
+Los feeds de canales y playlists de YouTube se cachean tras cargar sus vídeos. Si algún vídeo falla por un
+error transitorio (cola saturada, proceso colgado, timeout, error de red, HTTP 429/5xx), el feed se guarda
+como parcial y se reintenta al caducar (5 minutos). Los fallos permanentes (vídeos privados, borrados o
+solo para miembros) no cuentan: el feed se cachea como completo sin ellos.
 
 ### Comandos disponibles en Makefile
 
