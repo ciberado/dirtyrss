@@ -4,10 +4,10 @@ WORKDIR /app
 
 COPY package*.json tsconfig.json ./
 
-RUN npm i
+RUN npm ci
 COPY . .
 
-RUN npx tsc
+RUN npx tsc && npm prune --omit=dev
 
 FROM node:25-alpine
 
